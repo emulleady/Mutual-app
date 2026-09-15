@@ -1,0 +1,265 @@
+// Produccion (Render): PostgreSQL. Para desarrollo local segui usando
+// SQLite si preferis (cambiar aqui a "sqlite" y usar un .env con
+// DATABASE_URL="file:./dev.db"). En Render, DATABASE_URL la provee
+// automaticamente la base de datos Postgres que crees ahi.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Branch {
+  id        Int         @id @default(autoincrement())
+  name      String
+  active    Boolean     @default(true)
+  createdAt DateTime    @default(now())
+  users     User[]
+  affiliates Affiliate[]
+
+  @@map("branches")
+}
+
+model Role {
+  id          Int              @id @default(autoincrement())
+  name        String           @unique // "Administrador" | "Secretario"
+  description String?
+  users       User[]
+  permissions RolePermission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id    Int              @id @default(autoincrement())
+  key   String           @unique // ej: "affiliates.create", "audit.view"
+  roles RolePermission[]
+
+  @@map("permissions")
+}
+
+model RolePermission {
+  roleId       Int
+  permissionId Int
+  role         Role       @relation(fields: [roleId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([roleId, permissionId])
+  @@map("role_permissions")
+}
+
+model User {
+  id           Int      @id @default(autoincrement())
+  username     String   @unique
+  passwordHash String
+  fullName     String
+  roleId       Int
+  branchId     Int?
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  role         Role     @relation(fields: [roleId], references: [id])
+  branch       Branch?  @relation(fields: [branchId], references: [id])
+  auditLogs    AuditLog[]
+  affiliateEvents AffiliateEvent[]
+
+  @@map("users")
+}
+
+model Company {
+  id          Int      @id @default(autoincrement())
+  name        String
+  cuit        String?
+  address     String?
+  phone       String?
+  contactName String?
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  affiliates  Affiliate[]
+
+  @@map("companies")
+}
+
+model Affiliate {
+  id             Int      @id @default(autoincrement())
+  affiliateNumber String  @unique // Nº Asociado
+  firstName      String
+  lastName       String
+  dni            String   @unique
+  cuil           String?
+  birthDate      DateTime?
+  address        String?  // Domicilio
+  floorApt       String?  // Piso y Dpto
+  locality       String?  // Localidad
+  province       String?  // Provincia
+  phone          String?
+  email          String?
+  status         String   @default("active") // active | inactive | suspended
+  branchId       Int?
+  companyId      Int?     // empresa donde trabaja, para descuento por recibo de sueldo
+  yacimiento     String?
+  puesto         String?
+  companyEntryDate  DateTime? // Fecha Ingreso (a la empresa)
+  leaveDate1        DateTime? // Baja
+  reEntryDate       DateTime? // Fecha Alta nuevo
+  leaveDate2        DateTime? // Baja (segunda)
+  activeNote        String?   // Activos (texto libre de la planilla)
+  healthProvider     String?  // Obra Social
+  coveragePercentage String?  // "Al 100% - 60%"
+  healthProviderEntryDate DateTime? // Fecha Ingreso (a la obra social)
+  registryStatus     String?  // Estado (tal cual figura en la planilla)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  branch         Branch?  @relation(fields: [branchId], references: [id])
+  company        Company? @relation(fields: [companyId], references: [id])
+  events         AffiliateEvent[]
+  loans          Loan[]
+  dependents     Dependent[]
+
+  @@map("affiliates")
+}
+
+// Familiares a cargo del afiliado titular (conyuge, hijos, etc.),
+// importados de la misma planilla, diferenciados por la columna
+// "Parentesco". Nunca se borra ninguno: nada se borra en todo el sistema.
+model Dependent {
+  id             Int      @id @default(autoincrement())
+  affiliateId    Int
+  dependentNumber String? // número de afiliado propio del familiar (si la mutual le asigna uno)
+  fullName       String
+  dni            String?
+  cuil           String?
+  parentesco     String
+  birthDate      DateTime?
+  healthProvider     String?
+  coveragePercentage String?
+  healthProviderEntryDate DateTime?
+  registryStatus String?
+  address        String?
+  floorApt       String?
+  locality       String?
+  province       String?
+  phone          String?
+  email          String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  affiliate      Affiliate @relation(fields: [affiliateId], references: [id])
+
+  @@map("dependents")
+}
+
+// Etapa 2: prestamos, cuotas, pagos y mora.
+
+model Loan {
+  id                Int      @id @default(autoincrement())
+  affiliateId       Int
+  loanType          String
+  amount            Float
+  installmentsCount Int
+  installmentValue  Float
+  grantedAt         DateTime @default(now())
+  status            String   @default("active") // pending | approved | active | overdue | cancelled | rejected
+  cancelledAt       DateTime?
+  cancellationReason String?
+  createdByUserId   Int?
+  affiliate         Affiliate @relation(fields: [affiliateId], references: [id])
+  installments      LoanInstallment[]
+
+  @@map("loans")
+}
+
+// Una fila por cuota: permite mostrar pagadas/pendientes sin recalcular,
+// y es donde se detecta la mora (cuota vencida sin pago).
+model LoanInstallment {
+  id          Int      @id @default(autoincrement())
+  loanId      Int
+  number      Int
+  dueDate     DateTime
+  amount      Float
+  paidAmount  Float    @default(0)
+  status      String   @default("pending") // pending | paid | overdue
+  paidAt      DateTime?
+  loan        Loan     @relation(fields: [loanId], references: [id])
+  payments    LoanPayment[]
+  penalties   LoanInstallmentPenalty[]
+
+  @@map("loan_installments")
+}
+
+// Pagos reales: una cuota se puede pagar en mas de una parte.
+model LoanPayment {
+  id                Int      @id @default(autoincrement())
+  loanInstallmentId Int
+  amount            Float
+  paidAt            DateTime @default(now())
+  registeredByUserId Int?
+  installment       LoanInstallment @relation(fields: [loanInstallmentId], references: [id])
+
+  @@map("loan_payments")
+}
+
+// Tasa de interes por mora, configurable por el administrador.
+// Nunca se pisa un valor: se cierra con effectiveTo y se crea uno nuevo,
+// para que quede historial de que tasa regia en cada momento.
+model InterestRateSettings {
+  id              Int      @id @default(autoincrement())
+  rateType        String   // daily | monthly
+  rateValue       Float    // porcentaje, ej. 0.5 = 0.5%
+  effectiveFrom   DateTime @default(now())
+  effectiveTo     DateTime?
+  createdByUserId Int?
+  createdAt       DateTime @default(now())
+  penalties       LoanInstallmentPenalty[]
+
+  @@map("interest_rate_settings")
+}
+
+// Interes acumulado de una cuota en mora, calculado con la tasa vigente
+// al momento en que se venció (no se recalcula si la tasa cambia despues).
+model LoanInstallmentPenalty {
+  id                     Int      @id @default(autoincrement())
+  loanInstallmentId      Int
+  interestRateSettingsId Int
+  daysOverdue            Int
+  penaltyAmount          Float
+  calculatedAt           DateTime @default(now())
+  installment            LoanInstallment @relation(fields: [loanInstallmentId], references: [id])
+  rateSettings           InterestRateSettings @relation(fields: [interestRateSettingsId], references: [id])
+
+  @@map("loan_installment_penalties")
+}
+
+// Linea de tiempo de cada afiliado (punto 4/8 del brief).
+model AffiliateEvent {
+  id            Int       @id @default(autoincrement())
+  affiliateId   Int
+  eventType     String    // affiliate_created | data_modified | loan_granted | ...
+  referenceTable String?
+  referenceId   Int?
+  description   String
+  occurredAt    DateTime  @default(now())
+  createdByUserId Int?
+  affiliate     Affiliate @relation(fields: [affiliateId], references: [id])
+  createdBy     User?     @relation(fields: [createdByUserId], references: [id])
+
+  @@map("affiliate_events")
+}
+
+// Auditoria tecnica: solo INSERT desde la aplicacion, ningun rol puede
+// editar ni borrar filas de esta tabla.
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     Int?
+  action     String   // create | update | delete | login | ...
+  entityType String
+  entityId   Int?
+  beforeData String?  // JSON serializado
+  afterData  String?  // JSON serializado
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@map("audit_logs")
+}
