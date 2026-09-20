@@ -90,12 +90,15 @@ model Affiliate {
   dni            String   @unique
   cuil           String?
   birthDate      DateTime?
-  address        String?  // Domicilio
+  address        String?  // Domicilio (calle)
+  addressNumber  String?  // N° de puerta
+  addressType    String?  // "Casa" | "Dpto"
   floorApt       String?  // Piso y Dpto
   locality       String?  // Localidad
   province       String?  // Provincia
   phone          String?
   email          String?
+  socioType      String?  // Tipo de Socio (Ficha de Alta)
   status         String   @default("active") // active | inactive | suspended
   branchId       Int?
   companyId      Int?     // empresa donde trabaja, para descuento por recibo de sueldo
@@ -138,6 +141,8 @@ model Dependent {
   healthProviderEntryDate DateTime?
   registryStatus String?
   address        String?
+  addressNumber  String?
+  addressType    String?  // "Casa" | "Dpto"
   floorApt       String?
   locality       String?
   province       String?

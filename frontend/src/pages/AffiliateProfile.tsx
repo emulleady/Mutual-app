@@ -16,7 +16,8 @@ export default function AffiliateProfile() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [dependentForm, setDependentForm] = useState({
-    fullName: "", dni: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "",
+    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "",
+    address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
   });
   const [dependentError, setDependentError] = useState<string | null>(null);
 
@@ -34,6 +35,8 @@ export default function AffiliateProfile() {
       dni: affiliate.dni,
       cuil: affiliate.cuil || "",
       address: affiliate.address || "",
+      addressNumber: affiliate.addressNumber || "",
+      addressType: affiliate.addressType || "",
       floorApt: affiliate.floorApt || "",
       locality: affiliate.locality || "",
       province: affiliate.province || "",
@@ -45,6 +48,7 @@ export default function AffiliateProfile() {
       puesto: affiliate.puesto || "",
       healthProvider: affiliate.healthProvider || "",
       coveragePercentage: affiliate.coveragePercentage || "",
+      socioType: affiliate.socioType || "",
     });
     setError(null);
     setEditing(true);
@@ -88,12 +92,24 @@ export default function AffiliateProfile() {
       await api.createDependent(affiliate.id, {
         fullName: dependentForm.fullName,
         dni: dependentForm.dni || null,
+        cuil: dependentForm.cuil || null,
         dependentNumber: dependentForm.dependentNumber || null,
         parentesco,
         birthDate: dependentForm.birthDate ? new Date(dependentForm.birthDate).toISOString() : null,
+        address: dependentForm.address || null,
+        addressNumber: dependentForm.addressNumber || null,
+        addressType: dependentForm.addressType || null,
+        floorApt: dependentForm.floorApt || null,
+        locality: dependentForm.locality || null,
+        province: dependentForm.province || null,
+        phone: dependentForm.phone || null,
+        email: dependentForm.email || null,
       });
       setShowDependentForm(false);
-      setDependentForm({ fullName: "", dni: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "" });
+      setDependentForm({
+        fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "",
+        address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
+      });
       load();
     } catch (err: any) {
       setDependentError(err.message || "No se pudo agregar el familiar");
@@ -111,6 +127,9 @@ export default function AffiliateProfile() {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className={`badge badge-${affiliate.status}`}>{translate(affiliateStatusLabels, affiliate.status)}</span>
+          <button className="small-button" onClick={() => api.downloadFichaAlta(affiliate.id, `${affiliate.lastName}-${affiliate.firstName}`)}>
+            Ficha de Alta (PDF)
+          </button>
           <button className="small-button" onClick={handleToggleStatus}>
             {affiliate.status === "active" ? "Dar de baja" : "Reactivar"}
           </button>
@@ -151,7 +170,8 @@ export default function AffiliateProfile() {
                 <dt>CUIL</dt><dd>{affiliate.cuil || "—"}</dd>
                 <dt>Fecha de nacimiento</dt>
                 <dd>{affiliate.birthDate ? new Date(affiliate.birthDate).toLocaleDateString("es-AR") : "—"}</dd>
-                <dt>Dirección</dt><dd>{affiliate.address || "—"} {affiliate.floorApt ? `- ${affiliate.floorApt}` : ""}</dd>
+                <dt>Dirección</dt><dd>{affiliate.address || "—"} {affiliate.addressNumber ? `N° ${affiliate.addressNumber}` : ""} {affiliate.addressType ? `(${affiliate.addressType})` : ""} {affiliate.floorApt ? `- Piso ${affiliate.floorApt}` : ""}</dd>
+                <dt>Tipo de socio</dt><dd>{affiliate.socioType || "—"}</dd>
                 <dt>Localidad</dt><dd>{affiliate.locality || "—"}, {affiliate.province || "—"}</dd>
                 <dt>Teléfono</dt><dd>{affiliate.phone || "—"}</dd>
                 <dt>Email</dt><dd>{affiliate.email || "—"}</dd>
@@ -175,8 +195,16 @@ export default function AffiliateProfile() {
               <input value={form.cuil} onChange={(e) => setForm({ ...form, cuil: e.target.value })} />
               <label>Fecha de nacimiento</label>
               <input type="date" value={form.birthDate} onChange={(e) => setForm({ ...form, birthDate: e.target.value })} />
-              <label>Dirección</label>
+              <label>Dirección (calle)</label>
               <input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              <label>N° de puerta</label>
+              <input value={form.addressNumber} onChange={(e) => setForm({ ...form, addressNumber: e.target.value })} />
+              <label>Tipo</label>
+              <select value={form.addressType} onChange={(e) => setForm({ ...form, addressType: e.target.value })}>
+                <option value="">Sin especificar</option>
+                <option value="Casa">Casa</option>
+                <option value="Dpto">Dpto.</option>
+              </select>
               <label>Piso y Dpto</label>
               <input value={form.floorApt} onChange={(e) => setForm({ ...form, floorApt: e.target.value })} />
               <label>Localidad</label>
@@ -200,6 +228,8 @@ export default function AffiliateProfile() {
               <input value={form.healthProvider} onChange={(e) => setForm({ ...form, healthProvider: e.target.value })} />
               <label>Cobertura (Al 100% - 60%)</label>
               <input value={form.coveragePercentage} onChange={(e) => setForm({ ...form, coveragePercentage: e.target.value })} />
+              <label>Tipo de socio</label>
+              <input value={form.socioType} onChange={(e) => setForm({ ...form, socioType: e.target.value })} />
               {error && <div className="error-box">{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="submit">Guardar cambios</button>
@@ -220,9 +250,14 @@ export default function AffiliateProfile() {
         <div className="tab-panel">
           <div className="page-header">
             <h3>Familiares a cargo</h3>
-            <button onClick={() => setShowDependentForm((v) => !v)}>
-              {showDependentForm ? "Cancelar" : "Agregar familiar"}
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button className="small-button" onClick={() => api.downloadFichaFamiliares(affiliate.id, `${affiliate.lastName}-${affiliate.firstName}`)}>
+                Ficha de Familiares (PDF)
+              </button>
+              <button onClick={() => setShowDependentForm((v) => !v)}>
+                {showDependentForm ? "Cancelar" : "Agregar familiar"}
+              </button>
+            </div>
           </div>
 
           {showDependentForm && (
@@ -246,6 +281,28 @@ export default function AffiliateProfile() {
               )}
               <input type="date" value={dependentForm.birthDate}
                 onChange={(e) => setDependentForm({ ...dependentForm, birthDate: e.target.value })} />
+              <input placeholder="CUIL" value={dependentForm.cuil}
+                onChange={(e) => setDependentForm({ ...dependentForm, cuil: e.target.value })} />
+              <input placeholder="Domicilio (calle)" value={dependentForm.address}
+                onChange={(e) => setDependentForm({ ...dependentForm, address: e.target.value })} />
+              <input placeholder="N° de puerta" value={dependentForm.addressNumber}
+                onChange={(e) => setDependentForm({ ...dependentForm, addressNumber: e.target.value })} />
+              <select value={dependentForm.addressType}
+                onChange={(e) => setDependentForm({ ...dependentForm, addressType: e.target.value })}>
+                <option value="">Casa/Dpto</option>
+                <option value="Casa">Casa</option>
+                <option value="Dpto">Dpto.</option>
+              </select>
+              <input placeholder="Piso" value={dependentForm.floorApt}
+                onChange={(e) => setDependentForm({ ...dependentForm, floorApt: e.target.value })} />
+              <input placeholder="Localidad" value={dependentForm.locality}
+                onChange={(e) => setDependentForm({ ...dependentForm, locality: e.target.value })} />
+              <input placeholder="Provincia" value={dependentForm.province}
+                onChange={(e) => setDependentForm({ ...dependentForm, province: e.target.value })} />
+              <input placeholder="Teléfono" value={dependentForm.phone}
+                onChange={(e) => setDependentForm({ ...dependentForm, phone: e.target.value })} />
+              <input placeholder="Email" value={dependentForm.email}
+                onChange={(e) => setDependentForm({ ...dependentForm, email: e.target.value })} />
               {dependentError && <div className="error-box">{dependentError}</div>}
               <button type="submit">Guardar</button>
             </form>

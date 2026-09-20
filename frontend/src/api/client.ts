@@ -113,6 +113,10 @@ export const api = {
     downloadFile(`/companies/${id}/report/pdf`, `estado-afiliados-${companyName}.pdf`),
   createDependent: (affiliateId: number, data: unknown) =>
     request(`/affiliates/${affiliateId}/dependents`, { method: "POST", body: JSON.stringify(data) }),
+  downloadFichaAlta: (affiliateId: number, name: string) =>
+    downloadFile(`/affiliates/${affiliateId}/forms/alta`, `ficha-alta-${name}.pdf`),
+  downloadFichaFamiliares: (affiliateId: number, name: string) =>
+    downloadFile(`/affiliates/${affiliateId}/forms/familiares`, `ficha-familiares-${name}.pdf`),
   getAuditLogs: (params: Record<string, string>) => {
     const query = new URLSearchParams(params).toString();
     return request(`/audit${query ? `?${query}` : ""}`);

@@ -5,6 +5,7 @@ import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { importAffiliatesFromExcel } from "./import";
+import { generateFichaAltaPdf, generateFichaFamiliaresPdf } from "./forms";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -19,6 +20,8 @@ const affiliateSchema = z.object({
   cuil: z.string().optional().nullable(),
   birthDate: z.string().datetime().optional().nullable(),
   address: z.string().optional().nullable(),
+  addressNumber: z.string().optional().nullable(),
+  addressType: z.string().optional().nullable(),
   floorApt: z.string().optional().nullable(),
   locality: z.string().optional().nullable(),
   province: z.string().optional().nullable(),
@@ -30,6 +33,7 @@ const affiliateSchema = z.object({
   puesto: z.string().optional().nullable(),
   healthProvider: z.string().optional().nullable(),
   coveragePercentage: z.string().optional().nullable(),
+  socioType: z.string().optional().nullable(),
 });
 
 // Buscador global: por DNI, numero de afiliado, nombre, apellido,
@@ -273,11 +277,20 @@ router.get("/:id/dependents", async (req, res) => {
 const dependentSchema = z.object({
   fullName: z.string().min(1),
   dni: z.string().optional().nullable(),
+  cuil: z.string().optional().nullable(),
   dependentNumber: z.string().optional().nullable(),
   parentesco: z.string().min(1),
   birthDate: z.string().datetime().optional().nullable(),
   healthProvider: z.string().optional().nullable(),
   coveragePercentage: z.string().optional().nullable(),
+  address: z.string().optional().nullable(),
+  addressNumber: z.string().optional().nullable(),
+  addressType: z.string().optional().nullable(),
+  floorApt: z.string().optional().nullable(),
+  locality: z.string().optional().nullable(),
+  province: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal("")),
 });
 
 // Alta manual de un familiar a cargo (ademas de los que vienen por la
@@ -296,11 +309,20 @@ router.post("/:id/dependents", requirePermission("affiliates.edit"), async (req:
       affiliateId,
       fullName: data.fullName,
       dni: data.dni ?? null,
+      cuil: data.cuil ?? null,
       dependentNumber: data.dependentNumber ?? null,
       parentesco: data.parentesco,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
       healthProvider: data.healthProvider ?? null,
       coveragePercentage: data.coveragePercentage ?? null,
+      address: data.address ?? null,
+      addressNumber: data.addressNumber ?? null,
+      addressType: data.addressType ?? null,
+      floorApt: data.floorApt ?? null,
+      locality: data.locality ?? null,
+      province: data.province ?? null,
+      phone: data.phone ?? null,
+      email: data.email || null,
     },
   });
 
@@ -323,6 +345,29 @@ router.post("/:id/dependents", requirePermission("affiliates.edit"), async (req:
   });
 
   res.status(201).json(created);
+});
+
+// Descarga de las fichas en PDF, con los datos ya cargados en el sistema.
+router.get("/:id/forms/alta", async (req, res) => {
+  const id = Number(req.params.id);
+  const affiliate = await prisma.affiliate.findUnique({
+    where: { id },
+    include: { company: true },
+  });
+  if (!affiliate) return res.status(404).json({ error: "Afiliado no encontrado" });
+  generateFichaAltaPdf(res, affiliate);
+});
+
+router.get("/:id/forms/familiares", async (req, res) => {
+  const id = Number(req.params.id);
+  const affiliate = await prisma.affiliate.findUnique({ where: { id } });
+  if (!affiliate) return res.status(404).json({ error: "Afiliado no encontrado" });
+
+  const dependents = await prisma.dependent.findMany({
+    where: { affiliateId: id },
+    orderBy: { fullName: "asc" },
+  });
+  generateFichaFamiliaresPdf(res, affiliate, dependents);
 });
 
 export default router;
