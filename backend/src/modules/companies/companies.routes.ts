@@ -6,6 +6,7 @@ import path from "path";
 import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
+import { getLogoPath } from "../../shared/assets";
 import { buildCompanyReport } from "./report";
 
 const router = Router();
@@ -152,11 +153,13 @@ router.get("/:id/report/pdf", async (req, res) => {
   doc.pipe(res);
 
   // Membrete.
-  const logoPath = path.join(__dirname, "..", "..", "assets", "logo.png");
-  try {
-    doc.image(logoPath, 40, 30, { width: 50 });
-  } catch {
-    // Si el logo no está disponible, se sigue sin él.
+  const logoPath = getLogoPath();
+  if (logoPath) {
+    try {
+      doc.image(logoPath, 40, 30, { width: 50 });
+    } catch {
+      // Si falla al dibujarlo, se sigue sin él.
+    }
   }
   doc
     .fontSize(14)

@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import path from "path";
 import { Response } from "express";
+import { getLogoPath } from "../../shared/assets";
 
 const LETTERHEAD = {
   title: "Mutual Trabajadores Petrolero Privado",
@@ -11,11 +12,13 @@ const LETTERHEAD = {
 };
 
 function drawLetterhead(doc: PDFKit.PDFDocument) {
-  const logoPath = path.join(__dirname, "..", "..", "assets", "logo.png");
-  try {
-    doc.image(logoPath, 40, 28, { width: 55 });
-  } catch {
-    // sigue sin el logo si no está disponible
+  const logoPath = getLogoPath();
+  if (logoPath) {
+    try {
+      doc.image(logoPath, 40, 28, { width: 55 });
+    } catch {
+      // sigue sin el logo si falla al dibujarlo
+    }
   }
   doc.rect(35, 22, 525, 78).strokeColor("#333333").lineWidth(1).stroke();
   doc
@@ -49,11 +52,13 @@ function drawSunIcon(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number)
 }
 
 function drawFooter(doc: PDFKit.PDFDocument, y: number) {
-  const logoPath = path.join(__dirname, "..", "..", "assets", "logo.png");
-  try {
-    doc.image(logoPath, 40, y - 5, { width: 26 });
-  } catch {
-    // sigue sin el logo si no está disponible
+  const logoPath = getLogoPath();
+  if (logoPath) {
+    try {
+      doc.image(logoPath, 40, y - 5, { width: 26 });
+    } catch {
+      // sigue sin el logo si falla al dibujarlo
+    }
   }
   drawSunIcon(doc, 550, y + 8, 13);
 
