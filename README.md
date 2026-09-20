@@ -97,15 +97,15 @@ Requisitos: Node.js 18 o superior.
 cd backend
 cp .env.example .env
 npm install
-npx prisma migrate dev --name add_loans
+npx prisma db push
 npm run seed
 npm run dev
 ```
 
-Si ya tenías el backend de la Etapa 1 corriendo: pará el servidor
-(Ctrl+C), corré `npx prisma migrate dev --name add_loans` para agregar
-las tablas nuevas de préstamos sin perder los afiliados ya cargados, y
-volvé a correr `npm run dev`.
+Si ya tenías el backend corriendo y el schema cambió (por un archivo
+nuevo que te haya pasado): pará el servidor (Ctrl+C), corré
+`npx prisma db push` de nuevo para sincronizar las tablas sin perder
+los datos ya cargados, y volvé a correr `npm run dev`.
 
 Esto levanta la API en `http://localhost:4000`. La base de datos es SQLite
 (un archivo `dev.db`) para poder probar sin instalar nada más — para producción,
@@ -174,7 +174,7 @@ frontend (Static Site).
    - `FRONTEND_URL`: la URL del Static Site del paso 3 (se completa
      después de crearlo).
 
-   El build corre `prisma migrate deploy` solo, así que las tablas se
+   El build corre `prisma db push` solo, así que las tablas se
    crean solas en el primer deploy. Para crear el usuario administrador
    inicial, abrí la pestaña "Shell" del servicio en Render y corré
    `npm run seed` una sola vez.
