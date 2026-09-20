@@ -27,12 +27,12 @@ export async function requireAuth(
 
   const token = header.slice("Bearer ".length);
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as {
-      sub: number;
+    const payload = jwt.verify(token, process.env.JWT_SECRET as string) as unknown as {
+      userId: number;
     };
 
     const user = await prisma.user.findUnique({
-      where: { id: payload.sub },
+      where: { id: payload.userId },
       include: { role: true },
     });
 

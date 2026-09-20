@@ -32,9 +32,9 @@ router.post("/login", async (req, res) => {
     return res.status(401).json(genericError);
   }
 
-  const token = jwt.sign({ sub: user.id }, process.env.JWT_SECRET as string, {
+  const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET as string, {
     expiresIn: process.env.JWT_EXPIRES_IN || "30m",
-  });
+  } as jwt.SignOptions);
 
   await logAudit({
     userId: user.id,
