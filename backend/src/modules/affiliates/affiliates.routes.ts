@@ -6,6 +6,7 @@ import { AuthenticatedRequest, requireAuth, requirePermission } from "../../midd
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { importAffiliatesFromExcel } from "./import";
 import { generateFichaAltaPdf, generateFichaFamiliaresPdf } from "./forms";
+import { buildLiquidacionWorkbook } from "./liquidacion";
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
@@ -368,6 +369,25 @@ router.get("/:id/forms/familiares", async (req, res) => {
     orderBy: { fullName: "asc" },
   });
   generateFichaFamiliaresPdf(res, affiliate, dependents);
+});
+
+// Liquidación de deuda para enviar a la empresa (Excel), cuando se da de
+// baja a un afiliado con préstamos/órdenes de compra sin saldar.
+router.get("/:id/forms/liquidacion", async (req, res) => {
+  const id = Number(req.params.id);
+  const extras = {
+    obraSocial: Number(req.query.obraSocial) || 0,
+    cuotaMutual: Number(req.query.cuotaMutual) || 0,
+    sueldoBruto: Number(req.query.sueldoBruto) || 0,
+  };
+
+  const result = await buildLiquidacionWorkbook(id, extras);
+  if (!result) return res.status(404).json({ error: "Afiliado no encontrado" });
+
+  const fileName = `liquidacion-${result.affiliateName}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.send(result.buffer);
 });
 
 export default router;

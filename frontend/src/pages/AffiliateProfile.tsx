@@ -80,6 +80,17 @@ export default function AffiliateProfile() {
     load();
   }
 
+  async function handleDownloadLiquidacion() {
+    const obraSocial = Number(window.prompt("Monto adeudado de Obra Social (dejar 0 si no aplica)", "0")) || 0;
+    const cuotaMutual = Number(window.prompt("Monto de Cuota Mutual adeudada (dejar 0 si no aplica)", "0")) || 0;
+    const sueldoBruto = Number(window.prompt("Monto de 1% Sueldo Bruto adeudado (dejar 0 si no aplica)", "0")) || 0;
+    await api.downloadLiquidacion(
+      affiliate.id,
+      `${affiliate.lastName}-${affiliate.firstName}`,
+      { obraSocial, cuotaMutual, sueldoBruto }
+    );
+  }
+
   async function handleAddDependent(e: React.FormEvent) {
     e.preventDefault();
     setDependentError(null);
@@ -129,6 +140,9 @@ export default function AffiliateProfile() {
           <span className={`badge badge-${affiliate.status}`}>{translate(affiliateStatusLabels, affiliate.status)}</span>
           <button className="small-button" onClick={() => api.downloadFichaAlta(affiliate.id, `${affiliate.lastName}-${affiliate.firstName}`)}>
             Ficha de Alta (PDF)
+          </button>
+          <button className="small-button" onClick={handleDownloadLiquidacion}>
+            Liquidación (Excel)
           </button>
           <button className="small-button" onClick={handleToggleStatus}>
             {affiliate.status === "active" ? "Dar de baja" : "Reactivar"}

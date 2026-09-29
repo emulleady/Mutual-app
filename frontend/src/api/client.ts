@@ -123,6 +123,18 @@ export const api = {
     downloadFile(`/affiliates/${affiliateId}/forms/alta`, `ficha-alta-${name}.pdf`),
   downloadFichaFamiliares: (affiliateId: number, name: string) =>
     downloadFile(`/affiliates/${affiliateId}/forms/familiares`, `ficha-familiares-${name}.pdf`),
+  downloadLiquidacion: (
+    affiliateId: number,
+    name: string,
+    extras: { obraSocial: number; cuotaMutual: number; sueldoBruto: number }
+  ) => {
+    const query = new URLSearchParams({
+      obraSocial: String(extras.obraSocial),
+      cuotaMutual: String(extras.cuotaMutual),
+      sueldoBruto: String(extras.sueldoBruto),
+    }).toString();
+    return downloadFile(`/affiliates/${affiliateId}/forms/liquidacion?${query}`, `liquidacion-${name}.xlsx`);
+  },
   getAuditLogs: (params: Record<string, string>) => {
     const query = new URLSearchParams(params).toString();
     return request(`/audit${query ? `?${query}` : ""}`);
