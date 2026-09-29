@@ -59,4 +59,40 @@ router.post("/interest-rate", requirePermission("settings.manage"), async (req: 
   res.status(201).json(created);
 });
 
+// Numeración de las Órdenes de Compra: permite alinear el correlativo con
+// el que ya se venía usando en papel (ej. si iban por la A-000001166, se
+// carga ese número una vez y el sistema sigue solo desde ahí).
+router.get("/order-counter", async (_req, res) => {
+  const counter = await prisma.orderCounter.upsert({
+    where: { id: 1 },
+    update: {},
+    create: { id: 1, nextNumber: 1 },
+  });
+  res.json(counter);
+});
+
+const orderCounterSchema = z.object({ nextNumber: z.number().int().positive() });
+
+router.post("/order-counter", requirePermission("settings.manage"), async (req: AuthenticatedRequest, res) => {
+  const parsed = orderCounterSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const updated = await prisma.orderCounter.upsert({
+    where: { id: 1 },
+    update: { nextNumber: parsed.data.nextNumber },
+    create: { id: 1, nextNumber: parsed.data.nextNumber },
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "order_counter",
+    entityId: 1,
+    afterData: updated,
+    ipAddress: req.ip,
+  });
+
+  res.json(updated);
+});
+
 export default router;

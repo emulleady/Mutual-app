@@ -34,7 +34,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
       setForm({ loanType: "", amount: "", installmentsCount: "" });
       loadLoans();
     } catch (err: any) {
-      setError(err.message || "No se pudo crear el préstamo");
+      setError(err.message || "No se pudo crear la orden de compra");
     }
   }
 
@@ -53,8 +53,13 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   if (selectedLoan) {
     return (
       <div>
-        <button className="link-button-dark" onClick={() => setSelectedLoan(null)}>← Volver a préstamos</button>
-        <h3>{selectedLoan.loanType} — ${selectedLoan.amount}</h3>
+        <button className="link-button-dark" onClick={() => setSelectedLoan(null)}>← Volver a órdenes de compra</button>
+        <div className="page-header">
+          <h3>{selectedLoan.loanType} — ${selectedLoan.amount} {selectedLoan.orderNumber ? `(N° ${selectedLoan.orderNumber})` : ""}</h3>
+          <button className="small-button" onClick={() => api.downloadOrdenCompra(selectedLoan.id, selectedLoan.orderNumber || String(selectedLoan.id))}>
+            Descargar orden (PDF)
+          </button>
+        </div>
         <p>Estado: <span className={`badge badge-loan-${selectedLoan.status}`}>{translate(loanStatusLabels, selectedLoan.status)}</span></p>
         <table className="data-table">
           <thead>
@@ -87,28 +92,29 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   return (
     <div>
       <div className="page-header">
-        <h3>Préstamos activos</h3>
-        <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nuevo préstamo"}</button>
+        <h3>Órdenes de compra activas</h3>
+        <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva orden de compra"}</button>
       </div>
 
       {showForm && (
         <form className="inline-form" onSubmit={handleCreate}>
-          <input placeholder="Tipo (ej. Personal)" value={form.loanType}
+          <input placeholder="Comercio" value={form.loanType}
             onChange={(e) => setForm({ ...form, loanType: e.target.value })} required />
-          <input placeholder="Monto" type="number" value={form.amount}
+          <input placeholder="Importe total de compra" type="number" value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })} required />
           <input placeholder="Cantidad de cuotas" type="number" value={form.installmentsCount}
             onChange={(e) => setForm({ ...form, installmentsCount: e.target.value })} required />
           {error && <div className="error-box">{error}</div>}
-          <button type="submit">Otorgar préstamo</button>
+          <button type="submit">Generar orden de compra</button>
         </form>
       )}
 
       <table className="data-table">
-        <thead><tr><th>Tipo</th><th>Monto</th><th>Cuotas</th><th>Saldo</th><th>Próximo vto.</th><th>Mora</th><th>Estado</th></tr></thead>
+        <thead><tr><th>N° Orden</th><th>Comercio</th><th>Monto</th><th>Cuotas</th><th>Saldo</th><th>Próximo vto.</th><th>Mora</th><th>Estado</th></tr></thead>
         <tbody>
           {activeLoans.map((l) => (
             <tr key={l.id} className="clickable-row" onClick={() => openLoan(l.id)}>
+              <td>{l.orderNumber || "—"}</td>
               <td>{l.loanType}</td>
               <td>${l.amount}</td>
               <td>{l.paidInstallments}/{l.totalInstallments}</td>
@@ -118,16 +124,17 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
               <td><span className={`badge badge-loan-${l.status}`}>{translate(loanStatusLabels, l.status)}</span></td>
             </tr>
           ))}
-          {activeLoans.length === 0 && <tr><td colSpan={7}>Sin préstamos activos.</td></tr>}
+          {activeLoans.length === 0 && <tr><td colSpan={8}>Sin órdenes de compra activas.</td></tr>}
         </tbody>
       </table>
 
-      <h3 style={{ marginTop: 24 }}>Historial de préstamos</h3>
+      <h3 style={{ marginTop: 24 }}>Historial de órdenes de compra</h3>
       <table className="data-table">
-        <thead><tr><th>Tipo</th><th>Monto</th><th>Cuotas</th><th>Saldo</th><th>Estado</th></tr></thead>
+        <thead><tr><th>N° Orden</th><th>Comercio</th><th>Monto</th><th>Cuotas</th><th>Saldo</th><th>Estado</th></tr></thead>
         <tbody>
           {historicalLoans.map((l) => (
             <tr key={l.id} className="clickable-row" onClick={() => openLoan(l.id)}>
+              <td>{l.orderNumber || "—"}</td>
               <td>{l.loanType}</td>
               <td>${l.amount}</td>
               <td>{l.paidInstallments}/{l.totalInstallments}</td>
@@ -135,7 +142,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
               <td><span className={`badge badge-loan-${l.status}`}>{translate(loanStatusLabels, l.status)}</span></td>
             </tr>
           ))}
-          {historicalLoans.length === 0 && <tr><td colSpan={5}>Sin préstamos históricos.</td></tr>}
+          {historicalLoans.length === 0 && <tr><td colSpan={6}>Sin órdenes de compra históricas.</td></tr>}
         </tbody>
       </table>
     </div>

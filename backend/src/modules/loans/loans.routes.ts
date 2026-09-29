@@ -4,17 +4,36 @@ import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { recalculateOverdueInstallments } from "./mora";
+import { generateOrdenCompraPdf } from "./forms";
 
 const router = Router();
 router.use(requireAuth);
 
 const loanSchema = z.object({
   affiliateId: z.number(),
-  loanType: z.string().min(1),
+  loanType: z.string().min(1), // "Comercio" en la Orden de Compra
   amount: z.number().positive(),
   installmentsCount: z.number().int().positive(),
   grantedAt: z.string().datetime().optional(),
 });
+
+// Genera el próximo número de orden de forma atómica (formato "A-000001166"),
+// para que dos altas simultáneas nunca puedan repetir número.
+async function nextOrderNumber(): Promise<string> {
+  const counter = await prisma.$transaction(async (tx) => {
+    const current = await tx.orderCounter.upsert({
+      where: { id: 1 },
+      update: {},
+      create: { id: 1, nextNumber: 1 },
+    });
+    const updated = await tx.orderCounter.update({
+      where: { id: 1 },
+      data: { nextNumber: current.nextNumber + 1 },
+    });
+    return current.nextNumber;
+  });
+  return `A-${String(counter).padStart(9, "0")}`;
+}
 
 // Prestamos activos e historicos de un afiliado (misma tabla, distinto status).
 router.get("/affiliate/:affiliateId", async (req, res) => {
@@ -79,7 +98,7 @@ router.get("/:id", async (req, res) => {
     },
   });
 
-  if (!loan) return res.status(404).json({ error: "Préstamo no encontrado" });
+  if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
   res.json(loan);
 });
 
@@ -92,11 +111,13 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
   const data = parsed.data;
   const installmentValue = Number((data.amount / data.installmentsCount).toFixed(2));
   const grantedAt = data.grantedAt ? new Date(data.grantedAt) : new Date();
+  const orderNumber = await nextOrderNumber();
 
   const loan = await prisma.loan.create({
     data: {
       affiliateId: data.affiliateId,
       loanType: data.loanType,
+      orderNumber,
       amount: data.amount,
       installmentsCount: data.installmentsCount,
       installmentValue,
@@ -115,7 +136,7 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
   await logAffiliateEvent({
     affiliateId: data.affiliateId,
     eventType: "loan_granted",
-    description: `Otorgamiento de préstamo ${data.loanType} por $${data.amount} en ${data.installmentsCount} cuotas`,
+    description: `Otorgamiento de orden de compra ${data.loanType} por $${data.amount} en ${data.installmentsCount} cuotas`,
     referenceTable: "loans",
     referenceId: loan.id,
     createdByUserId: req.user?.id,
@@ -175,7 +196,7 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
   await logAffiliateEvent({
     affiliateId: installment.loan.affiliateId,
     eventType: "loan_payment",
-    description: `Pago de $${amount} en cuota N° ${installment.number} del préstamo ${installment.loan.loanType}`,
+    description: `Pago de $${amount} en cuota N° ${installment.number} de la orden de compra en ${installment.loan.loanType}`,
     referenceTable: "loan_payments",
     referenceId: payment.id,
     createdByUserId: req.user?.id,
@@ -191,6 +212,18 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
   });
 
   res.status(201).json(payment);
+});
+
+// Descarga la Orden de Compra en PDF, lista para que firme el afiliado.
+router.get("/:id/forms/orden-compra", async (req, res) => {
+  const id = Number(req.params.id);
+  const loan = await prisma.loan.findUnique({
+    where: { id },
+    include: { affiliate: { include: { company: true } } },
+  });
+  if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
+
+  generateOrdenCompraPdf(res, loan, loan.affiliate);
 });
 
 export default router;

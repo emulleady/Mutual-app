@@ -91,9 +91,14 @@ export const api = {
   createLoan: (data: unknown) => request("/loans", { method: "POST", body: JSON.stringify(data) }),
   registerPayment: (data: unknown) =>
     request("/loans/payments", { method: "POST", body: JSON.stringify(data) }),
+  downloadOrdenCompra: (loanId: number, orderNumber: string) =>
+    downloadFile(`/loans/${loanId}/forms/orden-compra`, `orden-compra-${orderNumber}.pdf`),
   getInterestRates: () => request("/settings/interest-rate"),
   setInterestRate: (data: unknown) =>
     request("/settings/interest-rate", { method: "POST", body: JSON.stringify(data) }),
+  getOrderCounter: () => request("/settings/order-counter"),
+  setOrderCounter: (nextNumber: number) =>
+    request("/settings/order-counter", { method: "POST", body: JSON.stringify({ nextNumber }) }),
   listUsers: () => request("/users"),
   listRoles: () => request("/users/roles"),
   createUser: (data: unknown) => request("/users", { method: "POST", body: JSON.stringify(data) }),

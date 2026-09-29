@@ -37,8 +37,8 @@ export const auditActionLabels: Record<string, string> = {
 export const auditEntityLabels: Record<string, string> = {
   affiliate: "Afiliado",
   affiliate_import: "Importación de afiliados",
-  loan: "Préstamo",
-  loan_payment: "Pago de préstamo",
+  loan: "Orden de compra",
+  loan_payment: "Pago de orden de compra",
   interest_rate_settings: "Tasa de mora",
   company: "Empresa",
   user: "Usuario",

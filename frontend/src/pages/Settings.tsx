@@ -6,6 +6,26 @@ export default function Settings() {
   const [rateType, setRateType] = useState<"daily" | "monthly">("monthly");
   const [rateValue, setRateValue] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [orderCounter, setOrderCounter] = useState<any | null>(null);
+  const [nextNumberInput, setNextNumberInput] = useState("");
+  const [counterError, setCounterError] = useState<string | null>(null);
+
+  function loadCounter() {
+    api.getOrderCounter().then(setOrderCounter).catch(() => {});
+  }
+  useEffect(loadCounter, []);
+
+  async function handleCounterSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setCounterError(null);
+    try {
+      await api.setOrderCounter(Number(nextNumberInput));
+      setNextNumberInput("");
+      loadCounter();
+    } catch (err: any) {
+      setCounterError(err.message || "No se pudo guardar el número");
+    }
+  }
 
   function load() {
     api.getInterestRates().then(setRates).catch(() => {});
@@ -66,6 +86,29 @@ export default function Settings() {
           ))}
         </tbody>
       </table>
+
+      <h1 style={{ marginTop: 40 }}>Numeración de Órdenes de Compra</h1>
+      <p>
+        {orderCounter
+          ? `La próxima orden de compra que se genere va a llevar el número A-${String(orderCounter.nextNumber).padStart(9, "0")}.`
+          : "Cargando..."}
+      </p>
+      <p className="note">
+        Usá esto una sola vez para alinear el correlativo con el que ya se venía usando en papel
+        (por ejemplo, si la última orden en papel fue la A-000001166, cargá 1167 acá para que la
+        próxima siga de ahí). No hace falta tocarlo de nuevo después.
+      </p>
+      <form className="inline-form" onSubmit={handleCounterSubmit}>
+        <input
+          placeholder="Próximo número (solo el número, sin la A- ni los ceros)"
+          type="number"
+          value={nextNumberInput}
+          onChange={(e) => setNextNumberInput(e.target.value)}
+          required
+        />
+        {counterError && <div className="error-box">{counterError}</div>}
+        <button type="submit">Guardar número</button>
+      </form>
     </div>
   );
 }

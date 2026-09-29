@@ -11,7 +11,7 @@ const LETTERHEAD = {
   line3: "Tel. 2964-422060 - Interno 111. Email: Mutualpetroleroprivadotdf@gmail.com",
 };
 
-function drawLetterhead(doc: PDFKit.PDFDocument) {
+export function drawLetterhead(doc: PDFKit.PDFDocument) {
   const logoPath = getLogoPath();
   if (logoPath) {
     try {
@@ -51,7 +51,7 @@ function drawSunIcon(doc: PDFKit.PDFDocument, cx: number, cy: number, r: number)
   doc.restore();
 }
 
-function drawFooter(doc: PDFKit.PDFDocument, y: number) {
+export function drawFooter(doc: PDFKit.PDFDocument, y: number) {
   const logoPath = getLogoPath();
   if (logoPath) {
     try {
@@ -84,7 +84,7 @@ function drawFooter(doc: PDFKit.PDFDocument, y: number) {
     .font("Helvetica");
 }
 
-function fieldLine(
+export function fieldLine(
   doc: PDFKit.PDFDocument,
   label: string,
   value: string,
@@ -104,7 +104,7 @@ function fieldLine(
     .stroke();
 }
 
-function fmtDate(d: Date | null | undefined) {
+export function fmtDate(d: Date | null | undefined) {
   if (!d) return "";
   return new Date(d).toLocaleDateString("es-AR");
 }

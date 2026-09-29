@@ -1,5 +1,29 @@
 # Sistema Integral de Gestión de Afiliados — Etapa 1 + Etapa 2
 
+## Orden de Compra (renombrado, agregado)
+
+Lo que antes era "Préstamo" ahora se llama **Orden de Compra** en toda la
+interfaz, siguiendo el formulario real de la mutual
+("AUTORIZACIÓN DE DESCUENTO DE HABERES"):
+
+- El campo "Tipo" pasó a ser **"Comercio"** (el comercio adherido donde
+  se hizo la compra).
+- Cada orden tiene un **número correlativo autogenerado** (formato
+  `A-000001166`), asignado de forma atómica al crearla — nunca se
+  repite ni se salta.
+- Botón **"Descargar orden (PDF)"** en el detalle de cada orden: genera
+  el documento con membrete de la mutual, fecha, lugar, número de orden,
+  datos del socio, empresa, comercio, importe total, cantidad de cuotas
+  (con el número en letras, ej. "5 (CINCO)") y monto de cada cuota —
+  listo para que el afiliado lo firme.
+- **Configuración → Numeración de Órdenes de Compra**: permite cargar
+  una vez el próximo número a usar, para alinear el correlativo del
+  sistema con el que ya se venía usando en papel.
+
+Todo lo demás del módulo (cuotas, pagos, mora con tasa configurable,
+historial) funciona igual que antes, solo cambió el nombre y se sumó
+el número de orden y el PDF.
+
 Etapa 1 (base): login, roles y permisos, CRUD de afiliados, buscador
 global, ficha con pestañas Resumen / Datos personales / Historial,
 dashboard y auditoría automática.

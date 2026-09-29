@@ -160,7 +160,8 @@ model Dependent {
 model Loan {
   id                Int      @id @default(autoincrement())
   affiliateId       Int
-  loanType          String
+  loanType          String   // usado como "Comercio" desde la Orden de Compra
+  orderNumber       String?  @unique // Nº de Orden de Compra, ej. "A-000001166"
   amount            Float
   installmentsCount Int
   installmentValue  Float
@@ -173,6 +174,15 @@ model Loan {
   installments      LoanInstallment[]
 
   @@map("loans")
+}
+
+// Fila unica que lleva el contador correlativo de las ordenes de compra
+// (para poder alinear la numeracion con la que ya venian usando en papel).
+model OrderCounter {
+  id         Int @id @default(1)
+  nextNumber Int @default(1)
+
+  @@map("order_counter")
 }
 
 // Una fila por cuota: permite mostrar pagadas/pendientes sin recalcular,

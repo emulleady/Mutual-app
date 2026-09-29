@@ -139,7 +139,7 @@ export default function AffiliateProfile() {
       <div className="tabs">
         <button className={tab === "resumen" ? "active" : ""} onClick={() => setTab("resumen")}>Resumen</button>
         <button className={tab === "datos" ? "active" : ""} onClick={() => setTab("datos")}>Datos personales</button>
-        <button className={tab === "prestamos" ? "active" : ""} onClick={() => setTab("prestamos")}>Préstamos</button>
+        <button className={tab === "prestamos" ? "active" : ""} onClick={() => setTab("prestamos")}>Órdenes de compra</button>
         <button className={tab === "familiares" ? "active" : ""} onClick={() => setTab("familiares")}>Familiares</button>
         <button className={tab === "historial" ? "active" : ""} onClick={() => setTab("historial")}>Historial</button>
       </div>
