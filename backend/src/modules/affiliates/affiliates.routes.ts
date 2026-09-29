@@ -49,10 +49,10 @@ router.get("/search", async (req, res) => {
       OR: [
         { dni: { contains: q } },
         { affiliateNumber: { contains: q } },
-        { firstName: { contains: q } },
-        { lastName: { contains: q } },
+        { firstName: { contains: q, mode: "insensitive" } },
+        { lastName: { contains: q, mode: "insensitive" } },
         { phone: { contains: q } },
-        { email: { contains: q } },
+        { email: { contains: q, mode: "insensitive" } },
       ],
     },
     take: 20,
