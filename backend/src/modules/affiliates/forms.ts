@@ -11,27 +11,27 @@ const LETTERHEAD = {
   line3: "Tel. 2964-422060 - Interno 111. Email: Mutualpetroleroprivadotdf@gmail.com",
 };
 
-export function drawLetterhead(doc: PDFKit.PDFDocument) {
+export function drawLetterhead(doc: PDFKit.PDFDocument, topY: number = 22) {
   const logoPath = getLogoPath();
   if (logoPath) {
     try {
-      doc.image(logoPath, 40, 28, { width: 55 });
+      doc.image(logoPath, 40, topY + 6, { width: 55 });
     } catch {
       // sigue sin el logo si falla al dibujarlo
     }
   }
-  doc.rect(35, 22, 525, 78).strokeColor("#333333").lineWidth(1).stroke();
+  doc.rect(35, topY, 525, 78).strokeColor("#333333").lineWidth(1).stroke();
   doc
     .fontSize(13)
     .fillColor("#000000")
-    .text(LETTERHEAD.title, 105, 30, { width: 445, align: "center" })
+    .text(LETTERHEAD.title, 105, topY + 8, { width: 445, align: "center" })
     .fontSize(10)
-    .text(LETTERHEAD.subtitle, 105, 46, { width: 445, align: "center" })
+    .text(LETTERHEAD.subtitle, 105, topY + 24, { width: 445, align: "center" })
     .fontSize(7)
     .fillColor("#333333")
-    .text(LETTERHEAD.line1, 105, 63, { width: 445, align: "center" })
-    .text(LETTERHEAD.line2, 105, 73, { width: 445, align: "center" })
-    .text(LETTERHEAD.line3, 105, 83, { width: 445, align: "center" })
+    .text(LETTERHEAD.line1, 105, topY + 41, { width: 445, align: "center" })
+    .text(LETTERHEAD.line2, 105, topY + 51, { width: 445, align: "center" })
+    .text(LETTERHEAD.line3, 105, topY + 61, { width: 445, align: "center" })
     .fillColor("#000000");
 }
 

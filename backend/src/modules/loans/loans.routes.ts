@@ -219,11 +219,52 @@ router.get("/:id/forms/orden-compra", async (req, res) => {
   const id = Number(req.params.id);
   const loan = await prisma.loan.findUnique({
     where: { id },
-    include: { affiliate: { include: { company: true } } },
+    include: {
+      affiliate: { include: { company: true } },
+      installments: { orderBy: { number: "asc" } },
+    },
   });
   if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
 
   generateOrdenCompraPdf(res, loan, loan.affiliate);
+});
+
+// Eliminar una orden de compra por completo (junto con sus cuotas, pagos
+// y moras). A diferencia del resto del sistema, esto SÍ borra de verdad
+// — reservado al administrador, para poder corregir errores de carga.
+// Queda de todas formas una entrada en la auditoría con lo que se borró.
+router.delete("/:id", requirePermission("orders.delete"), async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const loan = await prisma.loan.findUnique({
+    where: { id },
+    include: { installments: true },
+  });
+  if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
+
+  const installmentIds = loan.installments.map((i) => i.id);
+
+  await prisma.loanPayment.deleteMany({ where: { loanInstallmentId: { in: installmentIds } } });
+  await prisma.loanInstallmentPenalty.deleteMany({ where: { loanInstallmentId: { in: installmentIds } } });
+  await prisma.loanInstallment.deleteMany({ where: { loanId: id } });
+  await prisma.loan.delete({ where: { id } });
+
+  await logAffiliateEvent({
+    affiliateId: loan.affiliateId,
+    eventType: "loan_deleted",
+    description: `Se eliminó la orden de compra ${loan.orderNumber || loan.id} (${loan.loanType})`,
+    createdByUserId: req.user?.id,
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "delete",
+    entityType: "loan",
+    entityId: id,
+    beforeData: loan,
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
 });
 
 export default router;

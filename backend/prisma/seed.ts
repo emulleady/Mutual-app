@@ -34,6 +34,7 @@ async function main() {
     "audit.view",
     "settings.manage",
     "companies.manage",
+    "orders.delete",
   ];
 
   for (const key of permissionKeys) {

@@ -47,6 +47,15 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
     loadLoans();
   }
 
+  async function handleDelete() {
+    if (!window.confirm(`¿Eliminar definitivamente la orden ${selectedLoan.orderNumber || selectedLoan.id}? Esta acción no se puede deshacer.`)) return;
+    await api.deleteLoan(selectedLoan.id);
+    setSelectedLoan(null);
+    loadLoans();
+  }
+
+  const isAdmin = localStorage.getItem("role") === "Administrador";
+
   const activeLoans = loans.filter((l) => l.status === "active" || l.status === "overdue");
   const historicalLoans = loans.filter((l) => l.status !== "active" && l.status !== "overdue");
 
@@ -59,6 +68,11 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
           <button className="small-button" onClick={() => api.downloadOrdenCompra(selectedLoan.id, selectedLoan.orderNumber || String(selectedLoan.id))}>
             Descargar orden (PDF)
           </button>
+          {isAdmin && (
+            <button className="small-button" style={{ color: "#991b1b", borderColor: "#991b1b" }} onClick={handleDelete}>
+              Eliminar orden
+            </button>
+          )}
         </div>
         <p>Estado: <span className={`badge badge-loan-${selectedLoan.status}`}>{translate(loanStatusLabels, selectedLoan.status)}</span></p>
         <table className="data-table">
