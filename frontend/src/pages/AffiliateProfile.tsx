@@ -30,6 +30,7 @@ export default function AffiliateProfile() {
 
   function startEditing() {
     setForm({
+      affiliateNumber: affiliate.affiliateNumber,
       firstName: affiliate.firstName,
       lastName: affiliate.lastName,
       dni: affiliate.dni,
@@ -49,6 +50,7 @@ export default function AffiliateProfile() {
       healthProvider: affiliate.healthProvider || "",
       coveragePercentage: affiliate.coveragePercentage || "",
       socioType: affiliate.socioType || "",
+      feeAmount: affiliate.feeAmount != null ? String(affiliate.feeAmount) : "",
     });
     setError(null);
     setEditing(true);
@@ -62,6 +64,7 @@ export default function AffiliateProfile() {
         ...form,
         birthDate: form.birthDate ? new Date(form.birthDate).toISOString() : null,
         companyId: form.companyId ? Number(form.companyId) : null,
+        feeAmount: form.feeAmount ? Number(form.feeAmount) : null,
       });
       setEditing(false);
       load();
@@ -186,6 +189,7 @@ export default function AffiliateProfile() {
                 <dd>{affiliate.birthDate ? new Date(affiliate.birthDate).toLocaleDateString("es-AR") : "—"}</dd>
                 <dt>Dirección</dt><dd>{affiliate.address || "—"} {affiliate.addressNumber ? `N° ${affiliate.addressNumber}` : ""} {affiliate.addressType ? `(${affiliate.addressType})` : ""} {affiliate.floorApt ? `- Piso ${affiliate.floorApt}` : ""}</dd>
                 <dt>Tipo de socio</dt><dd>{affiliate.socioType || "—"}</dd>
+                <dt>Valor de cuota</dt><dd>{affiliate.feeAmount != null ? `$${affiliate.feeAmount.toLocaleString("es-AR")}` : "—"}</dd>
                 <dt>Localidad</dt><dd>{affiliate.locality || "—"}, {affiliate.province || "—"}</dd>
                 <dt>Teléfono</dt><dd>{affiliate.phone || "—"}</dd>
                 <dt>Email</dt><dd>{affiliate.email || "—"}</dd>
@@ -199,6 +203,12 @@ export default function AffiliateProfile() {
             </>
           ) : (
             <form className="inline-form" onSubmit={handleSave} style={{ flexDirection: "column", alignItems: "stretch" }}>
+              {localStorage.getItem("role") === "Administrador" && (
+                <>
+                  <label>N° de Asociado</label>
+                  <input value={form.affiliateNumber} onChange={(e) => setForm({ ...form, affiliateNumber: e.target.value })} required />
+                </>
+              )}
               <label>Nombre</label>
               <input value={form.firstName} onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
               <label>Apellido</label>
@@ -243,7 +253,16 @@ export default function AffiliateProfile() {
               <label>Cobertura (Al 100% - 60%)</label>
               <input value={form.coveragePercentage} onChange={(e) => setForm({ ...form, coveragePercentage: e.target.value })} />
               <label>Tipo de socio</label>
-              <input value={form.socioType} onChange={(e) => setForm({ ...form, socioType: e.target.value })} />
+              <select value={form.socioType} onChange={(e) => setForm({ ...form, socioType: e.target.value })}>
+                <option value="">Sin especificar</option>
+                <option value="Activo">Activo</option>
+                <option value="Adherente">Adherente</option>
+                <option value="Participante">Participante</option>
+                <option value="Honorario">Honorario</option>
+                <option value="No socio">No socio</option>
+              </select>
+              <label>Valor de cuota</label>
+              <input type="number" step="0.01" value={form.feeAmount} onChange={(e) => setForm({ ...form, feeAmount: e.target.value })} />
               {error && <div className="error-box">{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="submit">Guardar cambios</button>

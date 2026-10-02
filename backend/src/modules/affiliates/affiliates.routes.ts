@@ -35,6 +35,7 @@ const affiliateSchema = z.object({
   healthProvider: z.string().optional().nullable(),
   coveragePercentage: z.string().optional().nullable(),
   socioType: z.string().optional().nullable(),
+  feeAmount: z.number().optional().nullable(),
 });
 
 // Buscador global: por DNI, numero de afiliado, nombre, apellido,
@@ -148,6 +149,14 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
   }
 
   const data = parsed.data;
+
+  if (data.affiliateNumber && data.affiliateNumber !== before.affiliateNumber) {
+    const existing = await prisma.affiliate.findUnique({ where: { affiliateNumber: data.affiliateNumber } });
+    if (existing) {
+      return res.status(400).json({ error: "Ese número de afiliado ya lo tiene otra persona" });
+    }
+  }
+
   const updated = await prisma.affiliate.update({
     where: { id },
     data: {

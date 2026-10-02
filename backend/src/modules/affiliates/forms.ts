@@ -162,6 +162,19 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
 
   fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 55, 255);
   fieldLine(doc, "Tipo de Socio:", affiliate.socioType || "", 310, y, 80, 250);
+  y += 20;
+
+  const estadoLabel = affiliate.status === "active" ? "Activo" : affiliate.status === "suspended" ? "Suspendido" : "Inactivo";
+  fieldLine(
+    doc,
+    "Valor de Cuota: $",
+    affiliate.feeAmount != null ? affiliate.feeAmount.toLocaleString("es-AR", { minimumFractionDigits: 2 }) : "",
+    35,
+    y,
+    95,
+    255
+  );
+  fieldLine(doc, "Estado:", estadoLabel, 310, y, 45, 250);
   y += 24;
 
   doc.moveTo(35, y).lineTo(560, y).strokeColor("#333333").lineWidth(1).stroke();
@@ -182,7 +195,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
       y,
       { width: 525, align: "justify", lineGap: 1 }
     );
-  y = doc.y + 6;
+  y = doc.y + 4;
 
   doc.text(
     "Por la presente y de conformidad con los Art. N.° 146 de la ley 20.744 otorgo mi expreso consentimiento en " +
@@ -193,7 +206,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
     y,
     { width: 525, align: "justify", lineGap: 1 }
   );
-  y = doc.y + 6;
+  y = doc.y + 4;
 
   doc.text(
     "En caso de extinción de mi relación de trabajo con la empresa autorizo a la MUTUAL TRABAJADORES PETROLERO " +
@@ -208,7 +221,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
   y = doc.y + 10;
 
   fieldLine(doc, "Solicito que tenga efecto a partir del día:", "", 35, y, 235, 480);
-  y += 26;
+  y += 22;
 
   fieldLine(doc, "Firma del Asociado:", "", 35, y, 100, 255);
   fieldLine(doc, "Aclaración:", "", 310, y, 60, 250);

@@ -98,7 +98,8 @@ model Affiliate {
   province       String?  // Provincia
   phone          String?
   email          String?
-  socioType      String?  // Tipo de Socio (Ficha de Alta)
+  socioType      String?  // Tipo de Socio: Activo | Adherente | Participante | Honorario | No socio
+  feeAmount      Float?   // Valor de cuota
   status         String   @default("active") // active | inactive | suspended
   branchId       Int?
   companyId      Int?     // empresa donde trabaja, para descuento por recibo de sueldo
