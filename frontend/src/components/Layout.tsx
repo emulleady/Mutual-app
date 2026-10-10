@@ -6,11 +6,21 @@ export default function Layout({
   children,
   onLogout,
   isAdmin,
+  canSettings,
+  canUsers,
+  canCompanies,
+  canAudit,
+  canAgreements,
   canInventory,
 }: {
   children: React.ReactNode;
   onLogout: () => void;
   isAdmin: boolean;
+  canSettings?: boolean;
+  canUsers?: boolean;
+  canCompanies?: boolean;
+  canAudit?: boolean;
+  canAgreements?: boolean;
   canInventory?: boolean;
 }) {
   const navigate = useNavigate();
@@ -66,11 +76,12 @@ export default function Layout({
         <nav>
           <Link to="/">Resumen</Link>
           <Link to="/afiliados">Asociados</Link>
-          {isAdmin && <Link to="/configuracion">Configuración</Link>}
-          {isAdmin && <Link to="/usuarios">Usuarios</Link>}
-          {isAdmin && <Link to="/empresas">Empresas</Link>}
-          {isAdmin && <Link to="/auditoria">Auditoría</Link>}
-          {isAdmin && <Link to="/convenios">Convenios</Link>}
+          {canSettings && <Link to="/configuracion">Configuración</Link>}
+          {canUsers && <Link to="/usuarios">Usuarios</Link>}
+          {canUsers && <Link to="/roles">Roles</Link>}
+          {canCompanies && <Link to="/empresas">Empresas</Link>}
+          {canAudit && <Link to="/auditoria">Auditoría</Link>}
+          {canAgreements && <Link to="/convenios">Convenios</Link>}
           {canInventory && <Link to="/inventario">Inventario</Link>}
           <button className="link-button" onClick={onLogout}>Salir</button>
         </nav>

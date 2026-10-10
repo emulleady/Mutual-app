@@ -50,9 +50,14 @@ router.post("/login", async (req, res) => {
       include: { permission: true },
     }),
   ]);
-  const permissions = Array.from(
+  let permissions = Array.from(
     new Set([...rolePerms.map((p) => p.permission.key), ...userPerms.map((p) => p.permission.key)])
   );
+  // El Administrador siempre recibe todos los permisos del sistema.
+  if (user.role.name === "Administrador") {
+    const all = await prisma.permission.findMany();
+    permissions = all.map((p) => p.key);
+  }
 
   await logAudit({
     userId: user.id,

@@ -10,6 +10,7 @@ import Companies from "./pages/Companies";
 import AuditLog from "./pages/AuditLog";
 import Agreements from "./pages/Agreements";
 import Inventory from "./pages/Inventory";
+import Roles from "./pages/Roles";
 import Layout from "./components/Layout";
 
 function loadPermissions(): string[] {
@@ -48,22 +49,38 @@ export default function App() {
   }
 
   const isAdmin = role === "Administrador";
-  // Inventario lo puede usar el Administrador, o cualquier usuario al que
-  // se le haya otorgado el permiso individual "inventory.manage" (por
-  // ejemplo Matías) desde Usuarios → permisos individuales.
-  const canInventory = isAdmin || permissions.includes("inventory.manage");
+  // Cada seccion se muestra segun los permisos del usuario (los de su rol
+  // mas los individuales). El Administrador siempre tiene todo. El
+  // backend igual vuelve a exigir cada permiso en cada endpoint.
+  const can = (key: string) => isAdmin || permissions.includes(key);
+  const canSettings = can("settings.manage");
+  const canUsers = can("users.manage");
+  const canCompanies = can("companies.manage");
+  const canAudit = can("audit.view");
+  const canAgreements = can("agreements.manage");
+  const canInventory = can("inventory.manage");
 
   return (
-    <Layout onLogout={handleLogout} isAdmin={isAdmin} canInventory={canInventory}>
+    <Layout
+      onLogout={handleLogout}
+      isAdmin={isAdmin}
+      canSettings={canSettings}
+      canUsers={canUsers}
+      canCompanies={canCompanies}
+      canAudit={canAudit}
+      canAgreements={canAgreements}
+      canInventory={canInventory}
+    >
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/afiliados" element={<AffiliatesList />} />
         <Route path="/afiliados/:id" element={<AffiliateProfile />} />
-        {isAdmin && <Route path="/configuracion" element={<Settings />} />}
-        {isAdmin && <Route path="/usuarios" element={<Users />} />}
-        {isAdmin && <Route path="/empresas" element={<Companies />} />}
-        {isAdmin && <Route path="/auditoria" element={<AuditLog />} />}
-        {isAdmin && <Route path="/convenios" element={<Agreements />} />}
+        {canSettings && <Route path="/configuracion" element={<Settings />} />}
+        {canUsers && <Route path="/usuarios" element={<Users />} />}
+        {canUsers && <Route path="/roles" element={<Roles />} />}
+        {canCompanies && <Route path="/empresas" element={<Companies />} />}
+        {canAudit && <Route path="/auditoria" element={<AuditLog />} />}
+        {canAgreements && <Route path="/convenios" element={<Agreements />} />}
         {canInventory && <Route path="/inventario" element={<Inventory />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

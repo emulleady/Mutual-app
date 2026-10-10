@@ -61,6 +61,12 @@ export function requirePermission(permissionKey: string) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
+    // El Administrador tiene acceso total siempre, aunque todavia no se
+    // hayan sembrado en la base los permisos mas nuevos.
+    if (req.user.roleName === "Administrador") {
+      return next();
+    }
+
     const [fromRole, fromUser] = await Promise.all([
       prisma.rolePermission.findFirst({
         where: { roleId: req.user.roleId, permission: { key: permissionKey } },

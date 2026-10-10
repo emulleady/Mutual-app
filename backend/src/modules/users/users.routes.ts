@@ -28,9 +28,195 @@ router.get("/", async (_req, res) => {
   );
 });
 
+// Roles del sistema: "Administrador" tiene siempre acceso total y no se
+// puede modificar ni borrar; "Secretario" se puede ajustar pero no borrar
+// ni renombrar. Cualquier otro rol lo crea y administra el Administrador.
+const ADMIN_ROLE = "Administrador";
+const SYSTEM_ROLES = [ADMIN_ROLE, "Secretario"];
+
+// Listado de roles con sus permisos y cuantos usuarios lo usan.
 router.get("/roles", async (_req, res) => {
-  const roles = await prisma.role.findMany({ orderBy: { name: "asc" } });
-  res.json(roles);
+  const roles = await prisma.role.findMany({
+    orderBy: { name: "asc" },
+    include: { permissions: { include: { permission: true } }, _count: { select: { users: true } } },
+  });
+  res.json(
+    roles.map((r: any) => ({
+      id: r.id,
+      name: r.name,
+      description: r.description,
+      isSystem: SYSTEM_ROLES.includes(r.name),
+      isAdmin: r.name === ADMIN_ROLE,
+      userCount: r._count.users,
+      permissionKeys: r.permissions.map((rp: any) => rp.permission.key),
+    }))
+  );
+});
+
+// Catalogo de todos los permisos que existen en el sistema.
+router.get("/permissions", async (_req, res) => {
+  const permissions = await prisma.permission.findMany({ orderBy: { key: "asc" } });
+  res.json(permissions.map((p: any) => p.key));
+});
+
+const roleSchema = z.object({
+  name: z.string().trim().min(2, "El nombre del rol debe tener al menos 2 letras"),
+  description: z.string().trim().optional().nullable(),
+  permissionKeys: z.array(z.string()),
+});
+
+// Crear un rol nuevo, con los permisos que se tildaron.
+router.post("/roles", async (req: AuthenticatedRequest, res) => {
+  const parsed = roleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const data = parsed.data;
+
+  const existing = await prisma.role.findUnique({ where: { name: data.name } });
+  if (existing) return res.status(400).json({ error: "Ya existe un rol con ese nombre" });
+
+  const permissions = await prisma.permission.findMany({
+    where: { key: { in: data.permissionKeys } },
+  });
+
+  const created = await prisma.role.create({
+    data: {
+      name: data.name,
+      description: data.description || null,
+      permissions: { create: permissions.map((p: any) => ({ permissionId: p.id })) },
+    },
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "create",
+    entityType: "role",
+    entityId: created.id,
+    afterData: { name: created.name, permissionKeys: permissions.map((p: any) => p.key) },
+    ipAddress: req.ip,
+  });
+
+  res.status(201).json({ id: created.id, name: created.name });
+});
+
+// Editar un rol: nombre, descripcion y permisos (reemplaza el conjunto).
+router.put("/roles/:id", async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const parsed = roleSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const data = parsed.data;
+
+  const role = await prisma.role.findUnique({
+    where: { id },
+    include: { permissions: { include: { permission: true } } },
+  });
+  if (!role) return res.status(404).json({ error: "Rol no encontrado" });
+
+  if (role.name === ADMIN_ROLE) {
+    return res.status(400).json({ error: "El rol Administrador tiene acceso total y no se puede modificar" });
+  }
+  if (SYSTEM_ROLES.includes(role.name) && data.name !== role.name) {
+    return res.status(400).json({ error: `El rol ${role.name} no se puede renombrar` });
+  }
+  if (data.name !== role.name) {
+    const clash = await prisma.role.findUnique({ where: { name: data.name } });
+    if (clash) return res.status(400).json({ error: "Ya existe un rol con ese nombre" });
+  }
+
+  const permissions = await prisma.permission.findMany({
+    where: { key: { in: data.permissionKeys } },
+  });
+
+  const beforeKeys = role.permissions.map((rp: any) => rp.permission.key);
+
+  await prisma.$transaction([
+    prisma.rolePermission.deleteMany({ where: { roleId: id } }),
+    prisma.rolePermission.createMany({
+      data: permissions.map((p: any) => ({ roleId: id, permissionId: p.id })),
+    }),
+    prisma.role.update({
+      where: { id },
+      data: { name: data.name, description: data.description || null },
+    }),
+  ]);
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "role",
+    entityId: id,
+    beforeData: { name: role.name, permissionKeys: beforeKeys },
+    afterData: { name: data.name, permissionKeys: permissions.map((p: any) => p.key) },
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
+});
+
+// Borrar un rol: solo si es uno creado a mano y no tiene usuarios.
+router.delete("/roles/:id", async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const role = await prisma.role.findUnique({
+    where: { id },
+    include: { _count: { select: { users: true } } },
+  });
+  if (!role) return res.status(404).json({ error: "Rol no encontrado" });
+
+  if (SYSTEM_ROLES.includes(role.name)) {
+    return res.status(400).json({ error: `El rol ${role.name} es del sistema y no se puede borrar` });
+  }
+  if (role._count.users > 0) {
+    return res.status(400).json({
+      error: `No se puede borrar: ${role._count.users} usuario(s) todavía tienen este rol. Cambiales el rol primero.`,
+    });
+  }
+
+  await prisma.$transaction([
+    prisma.rolePermission.deleteMany({ where: { roleId: id } }),
+    prisma.role.delete({ where: { id } }),
+  ]);
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "delete",
+    entityType: "role",
+    entityId: id,
+    beforeData: { name: role.name },
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
+});
+
+// Cambiar el rol de un usuario existente.
+router.post("/:id/role", async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const parsed = z.object({ roleId: z.number().int() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  if (id === req.user?.id) {
+    return res.status(400).json({ error: "No podés cambiar tu propio rol" });
+  }
+
+  const [user, role] = await Promise.all([
+    prisma.user.findUnique({ where: { id }, include: { role: true } }),
+    prisma.role.findUnique({ where: { id: parsed.data.roleId } }),
+  ]);
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+  if (!role) return res.status(404).json({ error: "Rol no encontrado" });
+
+  await prisma.user.update({ where: { id }, data: { roleId: role.id } });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "user",
+    entityId: id,
+    beforeData: { role: user.role.name },
+    afterData: { role: role.name },
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
 });
 
 // Todos los permisos del sistema, marcando para este usuario puntual

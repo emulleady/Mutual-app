@@ -52,6 +52,18 @@ export default function Users() {
     }
   }
 
+  async function handleChangeRole(user: any, roleId: number) {
+    if (roleId === user.roleId) return;
+    const role = roles.find((r) => r.id === roleId);
+    if (!window.confirm(`¿Cambiar el rol de ${user.fullName} a "${role?.name}"?`)) return;
+    try {
+      await api.changeUserRole(user.id, roleId);
+    } catch (err: any) {
+      alert(err.message || "No se pudo cambiar el rol");
+    }
+    load();
+  }
+
   async function openPermissions(user: any) {
     setEditingPermissionsFor(user);
     const perms = await api.getUserPermissions(user.id);
@@ -146,7 +158,11 @@ export default function Users() {
             <tr key={u.id}>
               <td>{u.username}</td>
               <td>{u.fullName}</td>
-              <td>{u.role}</td>
+              <td>
+                <select value={u.roleId} onChange={(e) => handleChangeRole(u, Number(e.target.value))}>
+                  {roles.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
+                </select>
+              </td>
               <td><span className={`badge badge-${u.active ? "active" : "inactive"}`}>{u.active ? "activo" : "inactivo"}</span></td>
               <td style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 <button className="small-button" onClick={() => openPermissions(u)}>Permisos</button>

@@ -106,6 +106,13 @@ export const api = {
     request("/settings/membership-fees", { method: "POST", body: JSON.stringify({ socioType, feeAmount }) }),
   listUsers: () => request("/users"),
   listRoles: () => request("/users/roles"),
+  listPermissionKeys: () => request("/users/permissions"),
+  createRole: (data: unknown) => request("/users/roles", { method: "POST", body: JSON.stringify(data) }),
+  updateRole: (id: number, data: unknown) =>
+    request(`/users/roles/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  deleteRole: (id: number) => request(`/users/roles/${id}`, { method: "DELETE" }),
+  changeUserRole: (id: number, roleId: number) =>
+    request(`/users/${id}/role`, { method: "POST", body: JSON.stringify({ roleId }) }),
   createUser: (data: unknown) => request("/users", { method: "POST", body: JSON.stringify(data) }),
   toggleUserActive: (id: number) => request(`/users/${id}/toggle-active`, { method: "POST" }),
   resetUserPassword: (id: number, password: string) =>
