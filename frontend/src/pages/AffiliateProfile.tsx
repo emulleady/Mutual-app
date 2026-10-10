@@ -20,6 +20,7 @@ export default function AffiliateProfile() {
     address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
   });
   const [dependentError, setDependentError] = useState<string | null>(null);
+  const [membershipFees, setMembershipFees] = useState<any[]>([]);
 
   function load() {
     if (id) api.getAffiliate(Number(id)).then(setAffiliate).catch(() => {});
@@ -27,6 +28,19 @@ export default function AffiliateProfile() {
 
   useEffect(load, [id]);
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}); }, []);
+  useEffect(() => { api.getMembershipFees().then(setMembershipFees).catch(() => {}); }, []);
+
+  // Al elegir un tipo de socio, se precarga el valor de cuota configurado
+  // en Configuración — pero solo si el campo todavía está vacío, para no
+  // pisar un valor ya cargado a mano.
+  function handleSocioTypeChange(value: string) {
+    const match = membershipFees.find((f) => f.socioType === value);
+    setForm((f: any) => ({
+      ...f,
+      socioType: value,
+      feeAmount: !f.feeAmount && match ? String(match.feeAmount) : f.feeAmount,
+    }));
+  }
 
   function startEditing() {
     setForm({
@@ -51,6 +65,9 @@ export default function AffiliateProfile() {
       coveragePercentage: affiliate.coveragePercentage || "",
       socioType: affiliate.socioType || "",
       feeAmount: affiliate.feeAmount != null ? String(affiliate.feeAmount) : "",
+      membershipDate: (affiliate.membershipDate || affiliate.createdAt)
+        ? (affiliate.membershipDate || affiliate.createdAt).slice(0, 10)
+        : "",
     });
     setError(null);
     setEditing(true);
@@ -63,6 +80,7 @@ export default function AffiliateProfile() {
       await api.updateAffiliate(affiliate.id, {
         ...form,
         birthDate: form.birthDate ? new Date(form.birthDate).toISOString() : null,
+        membershipDate: form.membershipDate ? new Date(form.membershipDate).toISOString() : null,
         companyId: form.companyId ? Number(form.companyId) : null,
         feeAmount: form.feeAmount ? Number(form.feeAmount) : null,
       });
@@ -75,7 +93,7 @@ export default function AffiliateProfile() {
 
   async function handleToggleStatus() {
     if (affiliate.status === "active") {
-      if (!window.confirm("¿Dar de baja a este afiliado? No se pierde su historial.")) return;
+      if (!window.confirm("¿Dar de baja a este asociado? No se pierde su historial.")) return;
       await api.deactivateAffiliate(affiliate.id);
     } else {
       await api.activateAffiliate(affiliate.id);
@@ -137,7 +155,7 @@ export default function AffiliateProfile() {
       <div className="affiliate-header">
         <div>
           <h1>{affiliate.lastName}, {affiliate.firstName}</h1>
-          <p>DNI: {affiliate.dni} — N° de afiliado: {affiliate.affiliateNumber}</p>
+          <p>DNI: {affiliate.dni} — N° de asociado: {affiliate.affiliateNumber}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
           <span className={`badge badge-${affiliate.status}`}>{translate(affiliateStatusLabels, affiliate.status)}</span>
@@ -168,7 +186,7 @@ export default function AffiliateProfile() {
           <p>Yacimiento: {affiliate.yacimiento || "—"} — Puesto: {affiliate.puesto || "—"}</p>
           <p>Obra social: {affiliate.healthProvider || "—"} ({affiliate.coveragePercentage || "—"})</p>
           <p>Familiares a cargo: {affiliate.dependents?.length ?? 0}</p>
-          <p>Afiliado desde: {new Date(affiliate.createdAt).toLocaleDateString("es-AR")}</p>
+          <p>Asociado desde: {new Date(affiliate.membershipDate || affiliate.createdAt).toLocaleDateString("es-AR")}</p>
           <p className="note">
             Los módulos de servicios y beneficios se incorporan en las etapas
             siguientes del proyecto y se sumarán a este resumen.
@@ -197,7 +215,8 @@ export default function AffiliateProfile() {
                 <dt>Yacimiento</dt><dd>{affiliate.yacimiento || "—"}</dd>
                 <dt>Puesto</dt><dd>{affiliate.puesto || "—"}</dd>
                 <dt>Obra social</dt><dd>{affiliate.healthProvider || "—"} ({affiliate.coveragePercentage || "—"})</dd>
-                <dt>Fecha de alta</dt><dd>{new Date(affiliate.createdAt).toLocaleDateString("es-AR")}</dd>
+                <dt>Fecha de Asociación</dt>
+                <dd>{new Date(affiliate.membershipDate || affiliate.createdAt).toLocaleDateString("es-AR")}</dd>
               </dl>
               <button style={{ marginTop: 16 }} onClick={startEditing}>Editar datos</button>
             </>
@@ -207,6 +226,8 @@ export default function AffiliateProfile() {
                 <>
                   <label>N° de Asociado</label>
                   <input value={form.affiliateNumber} onChange={(e) => setForm({ ...form, affiliateNumber: e.target.value })} required />
+                  <label>Fecha de Asociación</label>
+                  <input type="date" value={form.membershipDate} onChange={(e) => setForm({ ...form, membershipDate: e.target.value })} />
                 </>
               )}
               <label>Nombre</label>
@@ -253,11 +274,12 @@ export default function AffiliateProfile() {
               <label>Cobertura (Al 100% - 60%)</label>
               <input value={form.coveragePercentage} onChange={(e) => setForm({ ...form, coveragePercentage: e.target.value })} />
               <label>Tipo de socio</label>
-              <select value={form.socioType} onChange={(e) => setForm({ ...form, socioType: e.target.value })}>
+              <select value={form.socioType} onChange={(e) => handleSocioTypeChange(e.target.value)}>
                 <option value="">Sin especificar</option>
                 <option value="Activo">Activo</option>
                 <option value="Adherente">Adherente</option>
                 <option value="Participante">Participante</option>
+                <option value="Socio Deportivo">Socio Deportivo</option>
                 <option value="Honorario">Honorario</option>
                 <option value="No socio">No socio</option>
               </select>
@@ -297,7 +319,7 @@ export default function AffiliateProfile() {
             <form className="inline-form" onSubmit={handleAddDependent}>
               <input placeholder="Nombre completo" value={dependentForm.fullName}
                 onChange={(e) => setDependentForm({ ...dependentForm, fullName: e.target.value })} required />
-              <input placeholder="N° de afiliado (opcional)" value={dependentForm.dependentNumber}
+              <input placeholder="N° de asociado (opcional)" value={dependentForm.dependentNumber}
                 onChange={(e) => setDependentForm({ ...dependentForm, dependentNumber: e.target.value })} />
               <input placeholder="DNI (opcional)" value={dependentForm.dni}
                 onChange={(e) => setDependentForm({ ...dependentForm, dni: e.target.value })} />
@@ -342,7 +364,7 @@ export default function AffiliateProfile() {
           )}
 
           <table className="data-table">
-            <thead><tr><th>N° afiliado</th><th>Nombre</th><th>Parentesco</th><th>DNI</th><th>Obra social</th><th>Cobertura</th></tr></thead>
+            <thead><tr><th>N° asociado</th><th>Nombre</th><th>Parentesco</th><th>DNI</th><th>Obra social</th><th>Cobertura</th></tr></thead>
             <tbody>
               {(affiliate.dependents || []).map((d: any) => (
                 <tr key={d.id}>

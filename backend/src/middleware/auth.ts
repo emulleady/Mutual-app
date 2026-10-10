@@ -52,23 +52,25 @@ export async function requireAuth(
   }
 }
 
-// Middleware de autorizacion: exige que el rol del usuario tenga el
-// permiso indicado. Se verifica en el backend, no alcanza con ocultar
-// botones en el frontend.
+// Middleware de autorizacion: exige que el rol del usuario, O un permiso
+// otorgado directamente a ese usuario puntual, incluya el permiso pedido.
+// Se verifica en el backend, no alcanza con ocultar botones en el frontend.
 export function requirePermission(permissionKey: string) {
   return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
-    const hasPermission = await prisma.rolePermission.findFirst({
-      where: {
-        roleId: req.user.roleId,
-        permission: { key: permissionKey },
-      },
-    });
+    const [fromRole, fromUser] = await Promise.all([
+      prisma.rolePermission.findFirst({
+        where: { roleId: req.user.roleId, permission: { key: permissionKey } },
+      }),
+      prisma.userPermission.findFirst({
+        where: { userId: req.user.id, permission: { key: permissionKey } },
+      }),
+    ]);
 
-    if (!hasPermission) {
+    if (!fromRole && !fromUser) {
       return res.status(403).json({ error: "No tiene permiso para esta accion" });
     }
 

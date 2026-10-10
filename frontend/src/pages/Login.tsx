@@ -26,7 +26,7 @@ export default function Login({ onLogin }: { onLogin: (token: string, role: stri
       <form className="login-card" onSubmit={handleSubmit}>
         <img src="/logo.png" alt="Mutual Petrolero Privado" className="login-logo" />
         <h1>Mutual Petrolero Privado</h1>
-        <p className="subtitle">Gestión de afiliados — Tierra del Fuego</p>
+        <p className="subtitle">Gestión de asociados — Tierra del Fuego</p>
 
         <label>Usuario</label>
         <input value={username} onChange={(e) => setUsername(e.target.value)} autoFocus />

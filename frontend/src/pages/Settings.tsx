@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
+const SOCIO_TYPES = ["Activo", "Adherente", "Participante", "Socio Deportivo", "Honorario"];
+
 export default function Settings() {
   const [rates, setRates] = useState<any[]>([]);
   const [rateType, setRateType] = useState<"daily" | "monthly">("monthly");
@@ -9,6 +11,36 @@ export default function Settings() {
   const [orderCounter, setOrderCounter] = useState<any | null>(null);
   const [nextNumberInput, setNextNumberInput] = useState("");
   const [counterError, setCounterError] = useState<string | null>(null);
+  const [fees, setFees] = useState<any[]>([]);
+  const [feeInputs, setFeeInputs] = useState<Record<string, string>>({});
+  const [feeError, setFeeError] = useState<string | null>(null);
+  const [feeSavedType, setFeeSavedType] = useState<string | null>(null);
+
+  function loadFees() {
+    api.getMembershipFees().then((list: any[]) => {
+      setFees(list);
+      const inputs: Record<string, string> = {};
+      SOCIO_TYPES.forEach((t) => {
+        const existing = list.find((f) => f.socioType === t);
+        inputs[t] = existing ? String(existing.feeAmount) : "";
+      });
+      setFeeInputs(inputs);
+    }).catch(() => {});
+  }
+  useEffect(loadFees, []);
+
+  async function handleFeeSubmit(socioType: string, e: React.FormEvent) {
+    e.preventDefault();
+    setFeeError(null);
+    setFeeSavedType(null);
+    try {
+      await api.setMembershipFee(socioType, Number(feeInputs[socioType] || 0));
+      setFeeSavedType(socioType);
+      loadFees();
+    } catch (err: any) {
+      setFeeError(err.message || "No se pudo guardar el valor de cuota");
+    }
+  }
 
   function loadCounter() {
     api.getOrderCounter().then(setOrderCounter).catch(() => {});
@@ -109,6 +141,39 @@ export default function Settings() {
         {counterError && <div className="error-box">{counterError}</div>}
         <button type="submit">Guardar número</button>
       </form>
+
+      <h1 style={{ marginTop: 40 }}>Valor de cuota por tipo de socio</h1>
+      <p className="note">
+        Este valor se usa solo como precarga del campo "Valor de cuota" al dar de alta o editar
+        un asociado — cambiarlo acá no modifica lo que ya tiene cargado cada asociado existente.
+      </p>
+      {feeError && <div className="error-box">{feeError}</div>}
+      <table className="data-table">
+        <thead><tr><th>Tipo de socio</th><th>Valor de cuota</th><th></th></tr></thead>
+        <tbody>
+          {SOCIO_TYPES.map((t) => (
+            <tr key={t}>
+              <td>{t}</td>
+              <td>
+                <form className="inline-form" onSubmit={(e) => handleFeeSubmit(t, e)} style={{ margin: 0 }}>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="$"
+                    value={feeInputs[t] ?? ""}
+                    onChange={(e) => setFeeInputs({ ...feeInputs, [t]: e.target.value })}
+                    style={{ width: 140 }}
+                  />
+                  <button type="submit" className="small-button">Guardar</button>
+                  {feeSavedType === t && <span style={{ color: "var(--teal-bright, #2cc9bf)", marginLeft: 8 }}>Guardado</span>}
+                </form>
+              </td>
+              <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

@@ -12,26 +12,26 @@ export default function Dashboard() {
 
   return (
     <div>
-      <h1>Dashboard</h1>
+      <h1>Resumen</h1>
       <div className="cards-grid">
         <div className="stat-card">
           <span className="stat-value">{data.totalAffiliates}</span>
-          <span className="stat-label">Afiliados totales</span>
+          <span className="stat-label">Asociados totales</span>
         </div>
         <div className="stat-card">
           <span className="stat-value">{data.activeAffiliates}</span>
-          <span className="stat-label">Afiliados activos</span>
+          <span className="stat-label">Asociados activos</span>
         </div>
         <div className="stat-card">
           <span className="stat-value">{data.inactiveAffiliates}</span>
-          <span className="stat-label">Afiliados inactivos</span>
+          <span className="stat-label">Asociados inactivos</span>
         </div>
       </div>
 
       <h2>Operaciones recientes</h2>
       <table className="data-table">
         <thead>
-          <tr><th>Fecha</th><th>Afiliado</th><th>Descripción</th></tr>
+          <tr><th>Fecha</th><th>Asociado</th><th>Descripción</th></tr>
         </thead>
         <tbody>
           {data.recentEvents.map((e: any) => (

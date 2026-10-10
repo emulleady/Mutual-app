@@ -65,7 +65,7 @@ export default function Companies() {
           <dt>Contacto</dt><dd>{selected.contactName || "—"}</dd>
         </dl>
 
-        <h3>Afiliados que trabajan en esta empresa ({selected.affiliates.length})</h3>
+        <h3>Asociados que trabajan en esta empresa ({selected.affiliates.length})</h3>
         <table className="data-table">
           <thead><tr><th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Estado</th></tr></thead>
           <tbody>
@@ -78,7 +78,7 @@ export default function Companies() {
               </tr>
             ))}
             {selected.affiliates.length === 0 && (
-              <tr><td colSpan={4}>Todavía no hay afiliados cargados con esta empresa.</td></tr>
+              <tr><td colSpan={4}>Todavía no hay asociados cargados con esta empresa.</td></tr>
             )}
           </tbody>
         </table>
@@ -102,7 +102,7 @@ export default function Companies() {
         <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva empresa"}</button>
       </div>
       <p className="note">
-        Empresas donde trabajan los afiliados, usadas para el descuento por recibo de sueldo.
+        Empresas donde trabajan los asociados, usadas para el descuento por recibo de sueldo.
       </p>
 
       {showForm && (

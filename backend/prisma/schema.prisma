@@ -37,6 +37,7 @@ model Permission {
   id    Int              @id @default(autoincrement())
   key   String           @unique // ej: "affiliates.create", "audit.view"
   roles RolePermission[]
+  userGrants UserPermission[]
 
   @@map("permissions")
 }
@@ -64,8 +65,22 @@ model User {
   branch       Branch?  @relation(fields: [branchId], references: [id])
   auditLogs    AuditLog[]
   affiliateEvents AffiliateEvent[]
+  directPermissions UserPermission[]
 
   @@map("users")
+}
+
+// Permisos otorgados directamente a un usuario puntual, ademas de los
+// que ya le da su rol. Se suman (nunca restan) a los del rol: si el
+// rol ya lo da, esto es redundante pero inofensivo.
+model UserPermission {
+  userId       Int
+  permissionId Int
+  user         User       @relation(fields: [userId], references: [id])
+  permission   Permission @relation(fields: [permissionId], references: [id])
+
+  @@id([userId, permissionId])
+  @@map("user_permissions")
 }
 
 model Company {
@@ -114,6 +129,7 @@ model Affiliate {
   coveragePercentage String?  // "Al 100% - 60%"
   healthProviderEntryDate DateTime? // Fecha Ingreso (a la obra social)
   registryStatus     String?  // Estado (tal cual figura en la planilla)
+  membershipDate DateTime? // Fecha de Asociación (editable); si no está cargada, se usa createdAt
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   branch         Branch?  @relation(fields: [branchId], references: [id])
@@ -121,6 +137,7 @@ model Affiliate {
   events         AffiliateEvent[]
   loans          Loan[]
   dependents     Dependent[]
+  inventoryLoans InventoryLoan[]
 
   @@map("affiliates")
 }
@@ -184,6 +201,20 @@ model OrderCounter {
   nextNumber Int @default(1)
 
   @@map("order_counter")
+}
+
+// Valor por defecto de la cuota según el tipo de socio (Activo, Adherente,
+// Participante, Socio Deportivo, Honorario). Se usa para precargar el
+// campo "Valor de cuota" al dar de alta o editar un asociado; no cambia
+// retroactivamente el valor ya cargado de nadie.
+model MembershipFeeSetting {
+  id              Int      @id @default(autoincrement())
+  socioType       String   @unique
+  feeAmount       Float
+  updatedByUserId Int?
+  updatedAt       DateTime @updatedAt
+
+  @@map("membership_fee_settings")
 }
 
 // Una fila por cuota: permite mostrar pagadas/pendientes sin recalcular,
@@ -261,6 +292,54 @@ model AffiliateEvent {
   createdBy     User?     @relation(fields: [createdByUserId], references: [id])
 
   @@map("affiliate_events")
+}
+
+// Convenios con Empresas y con Comercios (cada uno por separado, via
+// "kind"). Es un listado propio, no depende de que la empresa ya este
+// cargada como empleadora en el modelo Company.
+model Agreement {
+  id              Int      @id @default(autoincrement())
+  kind            String   // "empresa" | "comercio"
+  name            String
+  details         String?  // condiciones del convenio, texto libre
+  active          Boolean  @default(true)
+  createdByUserId Int?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@map("agreements")
+}
+
+// Inventario simple de artículos de la mutual (herramientas, equipos,
+// etc.) con historial de préstamos: a quién se le dio, cuándo, y si ya
+// fue devuelto.
+model InventoryItem {
+  id        Int      @id @default(autoincrement())
+  name      String
+  quantity  Int      @default(0) // cantidad total que tiene la mutual
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  loans     InventoryLoan[]
+
+  @@map("inventory_items")
+}
+
+model InventoryLoan {
+  id               Int       @id @default(autoincrement())
+  itemId           Int
+  quantity         Int       @default(1)
+  // Prestado a un asociado existente, o a cualquier persona (nombre libre).
+  affiliateId      Int?
+  borrowerName     String?
+  deliveredAt      DateTime  @default(now())
+  returnedAt       DateTime?
+  notes            String?
+  createdByUserId  Int?
+  item             InventoryItem @relation(fields: [itemId], references: [id])
+  affiliate        Affiliate?    @relation(fields: [affiliateId], references: [id])
+
+  @@map("inventory_loans")
 }
 
 // Auditoria tecnica: solo INSERT desde la aplicacion, ningun rol puede

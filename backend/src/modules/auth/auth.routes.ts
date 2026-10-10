@@ -36,6 +36,24 @@ router.post("/login", async (req, res) => {
     expiresIn: process.env.JWT_EXPIRES_IN || "30m",
   } as jwt.SignOptions);
 
+  // Permisos efectivos: los del rol más los otorgados puntualmente a este
+  // usuario. El frontend los usa para mostrar u ocultar secciones (el
+  // backend ya los exige igual en cada endpoint, esto es solo para no
+  // mostrar botones a los que el usuario no tiene acceso).
+  const [rolePerms, userPerms] = await Promise.all([
+    prisma.rolePermission.findMany({
+      where: { roleId: user.roleId },
+      include: { permission: true },
+    }),
+    prisma.userPermission.findMany({
+      where: { userId: user.id },
+      include: { permission: true },
+    }),
+  ]);
+  const permissions = Array.from(
+    new Set([...rolePerms.map((p) => p.permission.key), ...userPerms.map((p) => p.permission.key)])
+  );
+
   await logAudit({
     userId: user.id,
     action: "login",
@@ -51,6 +69,7 @@ router.post("/login", async (req, res) => {
       username: user.username,
       fullName: user.fullName,
       role: user.role.name,
+      permissions,
     },
   });
 });

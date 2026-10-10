@@ -36,6 +36,7 @@ const affiliateSchema = z.object({
   coveragePercentage: z.string().optional().nullable(),
   socioType: z.string().optional().nullable(),
   feeAmount: z.number().optional().nullable(),
+  membershipDate: z.string().datetime().optional().nullable(),
 });
 
 // Buscador global: por DNI, numero de afiliado, nombre, apellido,
@@ -67,10 +68,24 @@ router.get("/search", async (req, res) => {
 // Listado general (con filtro simple por estado).
 router.get("/", async (req, res) => {
   const status = req.query.status as string | undefined;
+  const sort = req.query.sort as string | undefined;
+
   const affiliates = await prisma.affiliate.findMany({
     where: status ? { status } : undefined,
-    orderBy: { lastName: "asc" },
+    orderBy: sort === "altas" ? undefined : { lastName: "asc" },
   });
+
+  // Listado de "todas las altas": ordenado por fecha de asociación (o,
+  // si no está cargada, por la fecha de creación del registro), la más
+  // reciente primero.
+  if (sort === "altas") {
+    affiliates.sort((a, b) => {
+      const dateA = new Date(a.membershipDate || a.createdAt).getTime();
+      const dateB = new Date(b.membershipDate || b.createdAt).getTime();
+      return dateB - dateA;
+    });
+  }
+
   res.json(affiliates);
 });
 
@@ -114,6 +129,7 @@ router.post("/", requirePermission("affiliates.create"), async (req: Authenticat
       email: data.email ?? null,
       branchId: data.branchId ?? null,
       companyId: data.companyId ?? null,
+      membershipDate: data.membershipDate ? new Date(data.membershipDate) : new Date(),
     },
   });
 
@@ -162,6 +178,7 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
     data: {
       ...data,
       birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
+      membershipDate: data.membershipDate ? new Date(data.membershipDate) : undefined,
     },
   });
 

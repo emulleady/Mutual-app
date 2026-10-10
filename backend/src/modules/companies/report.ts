@@ -2,11 +2,16 @@ import { prisma } from "../../db";
 import { recalculateOverdueInstallments } from "../loans/mora";
 
 export interface CompanyReportRow {
+  // Número de asociado + sufijo: "00" para el titular, "01", "02"... para
+  // cada familiar a cargo, en el orden en que fueron cargados.
   affiliateNumber: string;
   fullName: string;
   dni: string;
-  status: string;
-  totalDebt: number;
+  parentesco: string; // "Titular" para el socio, o el parentesco del familiar
+  status: string; // solo se completa en la fila del titular
+  healthProvider: string;
+  coveragePercentage: string;
+  totalDebt: number; // solo se completa en la fila del titular
 }
 
 export interface CompanyReport {
@@ -22,11 +27,17 @@ const statusLabels: Record<string, string> = {
 };
 
 // Arma el estado y la deuda total (saldo pendiente + mora acumulada de
-// prestamos activos) de cada afiliado que trabaja en la empresa.
+// prestamos activos) de cada afiliado que trabaja en la empresa, y agrega
+// debajo de cada uno sus familiares a cargo (numerados 00/01/02...).
 export async function buildCompanyReport(companyId: number): Promise<CompanyReport | null> {
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    include: { affiliates: { orderBy: { lastName: "asc" } } },
+    include: {
+      affiliates: {
+        orderBy: { lastName: "asc" },
+        include: { dependents: { orderBy: { id: "asc" } } },
+      },
+    },
   });
   if (!company) return null;
 
@@ -51,11 +62,27 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
     }
 
     rows.push({
-      affiliateNumber: affiliate.affiliateNumber,
+      affiliateNumber: `${affiliate.affiliateNumber}/00`,
       fullName: `${affiliate.lastName}, ${affiliate.firstName}`,
       dni: affiliate.dni,
+      parentesco: "Titular",
       status: statusLabels[affiliate.status] || affiliate.status,
+      healthProvider: affiliate.healthProvider || "",
+      coveragePercentage: affiliate.coveragePercentage || "",
       totalDebt: Number(totalDebt.toFixed(2)),
+    });
+
+    affiliate.dependents.forEach((dep, idx) => {
+      rows.push({
+        affiliateNumber: `${affiliate.affiliateNumber}/${String(idx + 1).padStart(2, "0")}`,
+        fullName: dep.fullName,
+        dni: dep.dni || "",
+        parentesco: dep.parentesco,
+        status: "",
+        healthProvider: dep.healthProvider || affiliate.healthProvider || "",
+        coveragePercentage: dep.coveragePercentage || affiliate.coveragePercentage || "",
+        totalDebt: 0,
+      });
     });
   }
 

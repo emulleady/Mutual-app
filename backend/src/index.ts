@@ -9,6 +9,8 @@ import settingsRoutes from "./modules/settings/settings.routes";
 import usersRoutes from "./modules/users/users.routes";
 import companiesRoutes from "./modules/companies/companies.routes";
 import auditRoutes from "./modules/audit/audit.routes";
+import agreementsRoutes from "./modules/agreements/agreements.routes";
+import inventoryRoutes from "./modules/inventory/inventory.routes";
 
 const app = express();
 
@@ -28,6 +30,8 @@ app.use("/api/settings", settingsRoutes);
 app.use("/api/users", usersRoutes);
 app.use("/api/companies", companiesRoutes);
 app.use("/api/audit", auditRoutes);
+app.use("/api/agreements", agreementsRoutes);
+app.use("/api/inventory", inventoryRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

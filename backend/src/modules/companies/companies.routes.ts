@@ -125,8 +125,11 @@ router.get("/:id/report/excel", async (req, res) => {
     "N° Asociado": r.affiliateNumber,
     "Apellido y Nombre": r.fullName,
     DNI: r.dni,
+    Parentesco: r.parentesco,
     Estado: r.status,
-    "Deuda total": r.totalDebt,
+    "Obra Social": r.healthProvider,
+    "% Cobertura": r.coveragePercentage,
+    "Deuda total": r.parentesco === "Titular" ? r.totalDebt : "",
   }));
 
   const worksheet = XLSX.utils.json_to_sheet(sheetData);
@@ -170,23 +173,23 @@ router.get("/:id/report/pdf", async (req, res) => {
     .fillColor("#000000");
 
   doc.moveDown(3);
-  doc.fontSize(12).text(`Estado de afiliados — ${report.companyName}`, { underline: true });
+  doc.fontSize(12).text(`Estado de asociados — ${report.companyName}`, { underline: true });
   doc.fontSize(9).fillColor("#555555").text(`Generado el ${report.generatedAt.toLocaleDateString("es-AR")}`);
   doc.fillColor("#000000").moveDown(1);
 
   // Encabezado de tabla.
   const startX = 40;
   let y = doc.y;
-  const colWidths = [70, 180, 80, 80, 90];
-  const headers = ["N° Asociado", "Apellido y Nombre", "DNI", "Estado", "Deuda total"];
+  const colWidths = [60, 130, 65, 60, 55, 90, 55];
+  const headers = ["N° Asociado", "Apellido y Nombre", "DNI", "Parentesco", "Estado", "Obra Social", "Deuda total"];
 
-  doc.fontSize(9).font("Helvetica-Bold");
+  doc.fontSize(8).font("Helvetica-Bold");
   headers.forEach((h, i) => {
     const x = startX + colWidths.slice(0, i).reduce((a, b) => a + b, 0);
     doc.text(h, x, y, { width: colWidths[i] });
   });
   doc.font("Helvetica");
-  y += 16;
+  y += 14;
   doc.moveTo(startX, y).lineTo(startX + colWidths.reduce((a, b) => a + b, 0), y).strokeColor("#cccccc").stroke();
   y += 6;
 
@@ -195,18 +198,23 @@ router.get("/:id/report/pdf", async (req, res) => {
       doc.addPage();
       y = 40;
     }
+    const isTitular = row.parentesco === "Titular";
     const values = [
       row.affiliateNumber,
       row.fullName,
       row.dni,
+      row.parentesco,
       row.status,
-      `$${row.totalDebt.toLocaleString("es-AR")}`,
+      row.healthProvider,
+      isTitular ? `$${row.totalDebt.toLocaleString("es-AR")}` : "",
     ];
+    if (isTitular) doc.font("Helvetica-Bold");
     values.forEach((v, i) => {
       const x = startX + colWidths.slice(0, i).reduce((a, b) => a + b, 0);
-      doc.text(v, x, y, { width: colWidths[i] });
+      doc.fontSize(8).text(v, x, y, { width: colWidths[i] });
     });
-    y += 18;
+    if (isTitular) doc.font("Helvetica");
+    y += 16;
   }
 
   doc.end();

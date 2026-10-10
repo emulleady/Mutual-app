@@ -6,10 +6,12 @@ export default function Layout({
   children,
   onLogout,
   isAdmin,
+  canInventory,
 }: {
   children: React.ReactNode;
   onLogout: () => void;
   isAdmin: boolean;
+  canInventory?: boolean;
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -29,21 +31,47 @@ export default function Layout({
           <img src="/logo.png" alt="Mutual Petrolero Privado" className="brand-logo" />
           <span>Mutual Petrolero Privado</span>
         </Link>
-        <form className="search-form" onSubmit={handleSearch}>
-          <input
-            placeholder="Buscar por nombre, DNI o N° de afiliado..."
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
-          <button type="submit">Buscar</button>
-        </form>
+        <div className="search-wrapper">
+          <form className="search-form" onSubmit={handleSearch}>
+            <input
+              placeholder="Buscar por nombre, DNI o N° de asociado..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+            />
+            <button type="submit">Buscar</button>
+          </form>
+
+          {results.length > 0 && (
+            <div className="search-results">
+              {results.map((r) => (
+                <div
+                  key={r.id}
+                  className="search-result-item"
+                  onClick={() => {
+                    setResults([]);
+                    setQuery("");
+                    navigate(`/afiliados/${r.id}`);
+                  }}
+                >
+                  <span className="search-result-name">{r.lastName}, {r.firstName}</span>
+                  <span className="search-result-meta">
+                    <span>DNI {r.dni}</span>
+                    <span>N° {r.affiliateNumber}</span>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
         <nav>
-          <Link to="/">Dashboard</Link>
-          <Link to="/afiliados">Afiliados</Link>
+          <Link to="/">Resumen</Link>
+          <Link to="/afiliados">Asociados</Link>
           {isAdmin && <Link to="/configuracion">Configuración</Link>}
           {isAdmin && <Link to="/usuarios">Usuarios</Link>}
           {isAdmin && <Link to="/empresas">Empresas</Link>}
           {isAdmin && <Link to="/auditoria">Auditoría</Link>}
+          {isAdmin && <Link to="/convenios">Convenios</Link>}
+          {canInventory && <Link to="/inventario">Inventario</Link>}
           <button className="link-button" onClick={onLogout}>Salir</button>
         </nav>
       </header>
@@ -79,6 +107,14 @@ export default function Layout({
             {" "}2964 42-2060
           </p>
         </div>
+
+        {isAdmin && (
+          <div className="side-banner-shortcuts">
+            <p className="side-banner-title">Accesos directos</p>
+            <Link to="/auditoria?usuario=Mmansilla">Movimientos de Mmansilla</Link>
+            <Link to="/auditoria?usuario=Rrodriguez">Movimientos de Rrodriguez</Link>
+          </div>
+        )}
       </aside>
 
       <main className="content">{children}</main>

@@ -33,6 +33,64 @@ router.get("/roles", async (_req, res) => {
   res.json(roles);
 });
 
+// Todos los permisos del sistema, marcando para este usuario puntual
+// cuáles le da su rol y cuáles tiene otorgados directamente (además).
+router.get("/:id/permissions", async (req, res) => {
+  const id = Number(req.params.id);
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const [allPermissions, rolePerms, userPerms] = await Promise.all([
+    prisma.permission.findMany({ orderBy: { key: "asc" } }),
+    prisma.rolePermission.findMany({ where: { roleId: user.roleId } }),
+    prisma.userPermission.findMany({ where: { userId: id } }),
+  ]);
+
+  const rolePermIds = new Set(rolePerms.map((p) => p.permissionId));
+  const userPermIds = new Set(userPerms.map((p) => p.permissionId));
+
+  res.json(
+    allPermissions.map((p) => ({
+      key: p.key,
+      fromRole: rolePermIds.has(p.id),
+      fromUser: userPermIds.has(p.id),
+    }))
+  );
+});
+
+const setPermissionsSchema = z.object({ permissionKeys: z.array(z.string()) });
+
+// Reemplaza por completo los permisos otorgados DIRECTAMENTE a este
+// usuario (los del rol no se tocan acá, siguen aplicando igual).
+router.post("/:id/permissions", async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const parsed = setPermissionsSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const user = await prisma.user.findUnique({ where: { id } });
+  if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
+
+  const permissions = await prisma.permission.findMany({
+    where: { key: { in: parsed.data.permissionKeys } },
+  });
+
+  await prisma.userPermission.deleteMany({ where: { userId: id } });
+  await prisma.userPermission.createMany({
+    data: permissions.map((p) => ({ userId: id, permissionId: p.id })),
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "user_permissions",
+    entityId: id,
+    afterData: { permissionKeys: parsed.data.permissionKeys },
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
+});
+
 const createSchema = z.object({
   username: z.string().min(3),
   password: z.string().min(8, "La contraseña debe tener al menos 8 caracteres"),

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
+import { permissionLabels, translate } from "../utils/labels";
 
 export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
@@ -7,6 +8,10 @@ export default function Users() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ username: "", password: "", fullName: "", roleId: "" });
   const [error, setError] = useState<string | null>(null);
+
+  const [editingPermissionsFor, setEditingPermissionsFor] = useState<any | null>(null);
+  const [permissions, setPermissions] = useState<any[]>([]);
+  const [permissionsSaving, setPermissionsSaving] = useState(false);
 
   function load() {
     api.listUsers().then(setUsers).catch(() => {});
@@ -47,6 +52,69 @@ export default function Users() {
     }
   }
 
+  async function openPermissions(user: any) {
+    setEditingPermissionsFor(user);
+    const perms = await api.getUserPermissions(user.id);
+    setPermissions(perms);
+  }
+
+  function togglePermission(key: string) {
+    setPermissions((prev) =>
+      prev.map((p) => (p.key === key ? { ...p, fromUser: !p.fromUser } : p))
+    );
+  }
+
+  async function savePermissions() {
+    setPermissionsSaving(true);
+    try {
+      const keys = permissions.filter((p) => p.fromUser).map((p) => p.key);
+      await api.setUserPermissions(editingPermissionsFor.id, keys);
+      setEditingPermissionsFor(null);
+    } catch (err: any) {
+      alert(err.message || "No se pudieron guardar los permisos");
+    } finally {
+      setPermissionsSaving(false);
+    }
+  }
+
+  if (editingPermissionsFor) {
+    return (
+      <div>
+        <button className="link-button-dark" onClick={() => setEditingPermissionsFor(null)}>
+          ← Volver a usuarios
+        </button>
+        <h1>Permisos de {editingPermissionsFor.fullName}</h1>
+        <p className="note">
+          Rol actual: {editingPermissionsFor.role}. Lo que marca "Por rol" ya lo tiene por ser
+          ese rol, y no se puede sacar desde acá (cambiá el rol si querés quitárselo). Marcá
+          abajo los permisos extra que querés darle solo a esta persona, además de su rol.
+        </p>
+        <table className="data-table">
+          <thead><tr><th></th><th>Permiso</th><th>Por rol</th></tr></thead>
+          <tbody>
+            {permissions.map((p) => (
+              <tr key={p.key}>
+                <td>
+                  <input
+                    type="checkbox"
+                    checked={p.fromRole || p.fromUser}
+                    disabled={p.fromRole}
+                    onChange={() => togglePermission(p.key)}
+                  />
+                </td>
+                <td>{translate(permissionLabels, p.key)}</td>
+                <td>{p.fromRole ? <span className="badge badge-active">incluido</span> : "—"}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <button style={{ marginTop: 16 }} onClick={savePermissions} disabled={permissionsSaving}>
+          {permissionsSaving ? "Guardando..." : "Guardar permisos"}
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div>
       <div className="page-header">
@@ -80,7 +148,8 @@ export default function Users() {
               <td>{u.fullName}</td>
               <td>{u.role}</td>
               <td><span className={`badge badge-${u.active ? "active" : "inactive"}`}>{u.active ? "activo" : "inactivo"}</span></td>
-              <td style={{ display: "flex", gap: 8 }}>
+              <td style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button className="small-button" onClick={() => openPermissions(u)}>Permisos</button>
                 <button className="small-button" onClick={() => handleReset(u.id)}>Restablecer contraseña</button>
                 <button className="small-button" onClick={() => handleToggle(u.id)}>
                   {u.active ? "Desactivar" : "Activar"}

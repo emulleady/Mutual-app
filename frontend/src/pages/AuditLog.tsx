@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { api } from "../api/client";
 import { auditActionLabels, auditEntityLabels, translate } from "../utils/labels";
 
 export default function AuditLog() {
+  const [searchParams] = useSearchParams();
   const [data, setData] = useState<any | null>(null);
   const [users, setUsers] = useState<any[]>([]);
   const [entityTypes, setEntityTypes] = useState<string[]>([]);
@@ -11,9 +13,30 @@ export default function AuditLog() {
   const [expandedId, setExpandedId] = useState<number | null>(null);
 
   useEffect(() => {
-    api.listUsers().then(setUsers).catch(() => {});
+    api.listUsers().then((list) => {
+      setUsers(list);
+      // Si vinimos de un acceso directo (?usuario=nombre), preseleccionamos
+      // ese usuario en el filtro apenas carga la lista.
+      const targetUsername = searchParams.get("usuario");
+      if (targetUsername) {
+        const match = list.find(
+          (u: any) => u.username.toLowerCase() === targetUsername.toLowerCase()
+        );
+        if (match) {
+          setFilters((f) => ({ ...f, userId: String(match.id) }));
+        }
+      }
+    }).catch(() => {});
     api.getAuditEntityTypes().then(setEntityTypes).catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Cuando el filtro de usuario se completa solo (por venir del acceso
+  // directo), disparamos la busqueda automaticamente.
+  useEffect(() => {
+    if (filters.userId) load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.userId]);
 
   function load() {
     const params: Record<string, string> = { page: String(page) };

@@ -160,8 +160,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
   fieldLine(doc, "Correo electrónico:", affiliate.email || "", 35, y, 100, 525);
   y += 20;
 
-  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 55, 255);
-  fieldLine(doc, "Tipo de Socio:", affiliate.socioType || "", 310, y, 80, 250);
+  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 55, 525);
   y += 20;
 
   const estadoLabel = affiliate.status === "active" ? "Activo" : affiliate.status === "suspended" ? "Suspendido" : "Inactivo";

@@ -35,14 +35,26 @@ export const auditActionLabels: Record<string, string> = {
 };
 
 export const auditEntityLabels: Record<string, string> = {
-  affiliate: "Afiliado",
-  affiliate_import: "Importación de afiliados",
+  affiliate: "Asociado",
+  affiliate_import: "Importación de asociados",
   loan: "Orden de compra",
   loan_payment: "Pago de orden de compra",
   interest_rate_settings: "Tasa de mora",
   company: "Empresa",
   user: "Usuario",
   dependent: "Familiar a cargo",
+};
+
+export const permissionLabels: Record<string, string> = {
+  "affiliates.create": "Crear asociados",
+  "affiliates.edit": "Editar asociados",
+  "affiliates.view": "Ver asociados",
+  "affiliates.deactivate": "Dar de baja / reactivar asociados",
+  "users.manage": "Gestionar usuarios y permisos",
+  "audit.view": "Ver auditoría",
+  "settings.manage": "Gestionar configuración (tasa de mora, numeración)",
+  "companies.manage": "Gestionar empresas",
+  "orders.delete": "Eliminar órdenes de compra",
 };
 
 export function translate(map: Record<string, string>, value: string): string {

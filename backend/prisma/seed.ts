@@ -35,6 +35,8 @@ async function main() {
     "settings.manage",
     "companies.manage",
     "orders.delete",
+    "agreements.manage",
+    "inventory.manage",
   ];
 
   for (const key of permissionKeys) {

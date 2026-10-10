@@ -95,4 +95,43 @@ router.post("/order-counter", requirePermission("settings.manage"), async (req: 
   res.json(updated);
 });
 
+// Valor de cuota por defecto segun el tipo de socio. Cualquier usuario
+// autenticado puede consultarlo (se usa para precargar el campo al cargar
+// o editar un asociado), pero solo el administrador puede modificarlo.
+router.get("/membership-fees", async (_req, res) => {
+  const fees = await prisma.membershipFeeSetting.findMany({ orderBy: { socioType: "asc" } });
+  res.json(fees);
+});
+
+const membershipFeeSchema = z.object({
+  socioType: z.string().min(1),
+  feeAmount: z.number().nonnegative(),
+});
+
+router.post("/membership-fees", requirePermission("settings.manage"), async (req: AuthenticatedRequest, res) => {
+  const parsed = membershipFeeSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const updated = await prisma.membershipFeeSetting.upsert({
+    where: { socioType: parsed.data.socioType },
+    update: { feeAmount: parsed.data.feeAmount, updatedByUserId: req.user?.id },
+    create: {
+      socioType: parsed.data.socioType,
+      feeAmount: parsed.data.feeAmount,
+      updatedByUserId: req.user?.id,
+    },
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "membership_fee_setting",
+    entityId: updated.id,
+    afterData: updated,
+    ipAddress: req.ip,
+  });
+
+  res.json(updated);
+});
+
 export default router;

@@ -90,13 +90,22 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
     `attachment; filename="orden-compra-${loan.orderNumber || loan.id}.pdf"`
   );
 
-  const doc = new PDFDocument({ margin: 35, size: "A4" });
+  const doc = new PDFDocument({ margin: 20, size: "A4" });
   doc.pipe(res);
 
   const fullNameNormal = `${affiliate.lastName}, ${affiliate.firstName}`;
   const fullNameUpper = `${affiliate.lastName} ${affiliate.firstName}`.toUpperCase();
   const orderNumber = loan.orderNumber || "";
   const asociadoNumero = `${affiliate.affiliateNumber || ""}/00`;
+  // El encabezado "DATOS SOCIO ..." refleja el tipo de socio real
+  // (Activo, Participante, Adherente, etc.), en vez de decir siempre
+  // "ACTIVO" sin importar el tipo cargado en la ficha. Si el tipo ya
+  // empieza con "Socio" (ej. "Socio Deportivo") o es "No socio", no se
+  // antepone la palabra "SOCIO" de nuevo para no duplicarla.
+  const socioTypeRaw = (affiliate.socioType || "Activo").toUpperCase();
+  const socioLabel = socioTypeRaw.startsWith("SOCIO") || socioTypeRaw.startsWith("NO SOCIO")
+    ? socioTypeRaw
+    : `SOCIO ${socioTypeRaw}`;
 
   // ---------- Cupón 1: para la Mutual (compacto) ----------
   drawLetterhead(doc);
@@ -118,16 +127,16 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
   doc.moveTo(35, y).lineTo(560, y).strokeColor("#333333").lineWidth(1).stroke();
   y += 12;
 
-  doc.fontSize(10).font("Helvetica-Bold").text("DATOS SOCIO ACTIVO", 35, y, { underline: true });
+  doc.fontSize(10).font("Helvetica-Bold").text(`DATOS ${socioLabel}`, 35, y, { underline: true });
   y += 18;
 
   fieldLine(doc, "Apellido y Nombre:", fullNameNormal, 35, y, 110, 335);
   fieldLine(doc, "Firma:", "", 385, y, 40, 175);
   y += 22;
 
-  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 60, 185);
-  fieldLine(doc, "Asociado/a N.º:", asociadoNumero, 235, y, 90, 145);
-  fieldLine(doc, "Comercio:", loan.loanType || "", 400, y, 62, 160);
+  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 60, 165);
+  fieldLine(doc, "Asociado/a N.º:", asociadoNumero, 205, y, 78, 175);
+  fieldLine(doc, "Comercio:", loan.loanType || "", 390, y, 62, 170);
   y += 22;
 
   fieldLine(doc, "Importe Total de Compra: $", loan.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 35, y, 150, 255);
@@ -171,34 +180,34 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
   const topOfCoupon2 = y;
   drawLetterhead(doc, topOfCoupon2);
 
-  y = topOfCoupon2 + 90;
+  y = topOfCoupon2 + 84;
   doc
     .fontSize(15)
     .font("Helvetica-Bold")
     .text("ORDEN DE COMPRA", 35, y, { width: 525, align: "center" });
-  y += 22;
+  y += 20;
   doc
     .fontSize(13)
     .text("AUTORIZACIÓN DE DESCUENTO DE HABERES", 35, y, { width: 525, align: "center", underline: true });
-  y += 24;
+  y += 20;
 
   fieldLine(doc, "Fecha:", fmtDate(loan.grantedAt), 35, y, 45, 350);
   doc.fontSize(9.5).font("Helvetica-Bold").text(`N° ${orderNumber}`, 480, y);
-  y += 20;
+  y += 18;
 
-  doc.fontSize(10).font("Helvetica-Bold").text("DATOS SOCIO ACTIVO:", 35, y, { underline: true });
-  y += 16;
+  doc.fontSize(10).font("Helvetica-Bold").text(`DATOS ${socioLabel}:`, 35, y, { underline: true });
+  y += 14;
 
   fieldLine(doc, "Apellido y Nombre:", fullNameNormal, 35, y, 105, 300);
   fieldLine(doc, "Empresa:", affiliate.company?.name || "", 350, y, 55, 175);
-  y += 18;
+  y += 16;
 
   fieldLine(doc, "Asociado/a N.º:", asociadoNumero, 35, y, 90, 260);
   fieldLine(doc, "Comercio:", loan.loanType || "", 310, y, 58, 215);
-  y += 18;
+  y += 16;
 
   fieldLine(doc, "Importe Total Compra Pesos: $", loan.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 35, y, 175, 260);
-  y += 18;
+  y += 16;
 
   fieldLine(
     doc,
@@ -218,7 +227,7 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
     88,
     250
   );
-  y += 22;
+  y += 18;
 
   doc
     .fontSize(8)
@@ -234,9 +243,9 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
         "de la empresa pudiera adeudar por cualquier causa y/o créditos que me fueran otorgados.",
       35,
       y,
-      { width: 525, align: "justify", lineGap: 0.5 }
+      { width: 525, align: "justify", lineGap: 0 }
     );
-  y = doc.y + 8;
+  y = doc.y + 6;
 
   const domicilioCompleto = [
     affiliate.address,
@@ -256,13 +265,15 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
       "Tribunales Ordinarios del Distrito Judicial Norte de la Provincia de Tierra del Fuego A. e I.A.S.",
     35,
     y,
-    { width: 525, align: "justify", lineGap: 0.5 }
+    { width: 525, align: "justify", lineGap: 0 }
   );
-  y = doc.y + 12;
+  y = doc.y + 8;
 
   const lastInstallment = (loan.installments || [])[loan.installments?.length - 1];
   fieldLine(doc, "Vencimiento:", lastInstallment ? fmtDate(lastInstallment.dueDate) : "", 35, y, 65, 260);
-  y += 26;
+  // Se deja más espacio en blanco antes de las líneas de firma (2cm ≈ 57pt)
+  // para que se pueda firmar con más comodidad y prolijidad.
+  y += 26 + 57;
 
   fieldLine(doc, "", "", 35, y, 0, 130);
   fieldLine(doc, "", "", 175, y, 0, 130);

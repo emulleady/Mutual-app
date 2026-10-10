@@ -76,7 +76,8 @@ export const api = {
     request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   dashboard: () => request("/dashboard"),
   searchAffiliates: (q: string) => request(`/affiliates/search?q=${encodeURIComponent(q)}`),
-  listAffiliates: () => request("/affiliates"),
+  listAffiliates: (params?: { sort?: string }) =>
+    request(`/affiliates${params?.sort ? `?sort=${params.sort}` : ""}`),
   getAffiliate: (id: number) => request(`/affiliates/${id}`),
   createAffiliate: (data: unknown) =>
     request("/affiliates", { method: "POST", body: JSON.stringify(data) }),
@@ -100,18 +101,44 @@ export const api = {
   getOrderCounter: () => request("/settings/order-counter"),
   setOrderCounter: (nextNumber: number) =>
     request("/settings/order-counter", { method: "POST", body: JSON.stringify({ nextNumber }) }),
+  getMembershipFees: () => request("/settings/membership-fees"),
+  setMembershipFee: (socioType: string, feeAmount: number) =>
+    request("/settings/membership-fees", { method: "POST", body: JSON.stringify({ socioType, feeAmount }) }),
   listUsers: () => request("/users"),
   listRoles: () => request("/users/roles"),
   createUser: (data: unknown) => request("/users", { method: "POST", body: JSON.stringify(data) }),
   toggleUserActive: (id: number) => request(`/users/${id}/toggle-active`, { method: "POST" }),
   resetUserPassword: (id: number, password: string) =>
     request(`/users/${id}/reset-password`, { method: "POST", body: JSON.stringify({ password }) }),
+  getUserPermissions: (id: number) => request(`/users/${id}/permissions`),
+  setUserPermissions: (id: number, permissionKeys: string[]) =>
+    request(`/users/${id}/permissions`, { method: "POST", body: JSON.stringify({ permissionKeys }) }),
   listCompanies: () => request("/companies"),
   getCompany: (id: number) => request(`/companies/${id}`),
   createCompany: (data: unknown) => request("/companies", { method: "POST", body: JSON.stringify(data) }),
   updateCompany: (id: number, data: unknown) =>
     request(`/companies/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   toggleCompanyActive: (id: number) => request(`/companies/${id}/toggle-active`, { method: "POST" }),
+  listAgreements: (kind?: string) => request(`/agreements${kind ? `?kind=${kind}` : ""}`),
+  createAgreement: (data: unknown) => request("/agreements", { method: "POST", body: JSON.stringify(data) }),
+  updateAgreement: (id: number, data: unknown) =>
+    request(`/agreements/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  toggleAgreementActive: (id: number) => request(`/agreements/${id}/toggle-active`, { method: "POST" }),
+  listInventoryItems: () => request("/inventory/items"),
+  createInventoryItem: (data: unknown) => request("/inventory/items", { method: "POST", body: JSON.stringify(data) }),
+  updateInventoryItem: (id: number, data: unknown) =>
+    request(`/inventory/items/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  toggleInventoryItemActive: (id: number) => request(`/inventory/items/${id}/toggle-active`, { method: "POST" }),
+  listInventoryLoans: (params?: { itemId?: number; active?: boolean }) => {
+    const qs = new URLSearchParams();
+    if (params?.itemId) qs.set("itemId", String(params.itemId));
+    if (params?.active) qs.set("active", "true");
+    const s = qs.toString();
+    return request(`/inventory/loans${s ? `?${s}` : ""}`);
+  },
+  createInventoryLoan: (data: unknown) => request("/inventory/loans", { method: "POST", body: JSON.stringify(data) }),
+  returnInventoryLoan: (id: number, notes?: string) =>
+    request(`/inventory/loans/${id}/return`, { method: "POST", body: JSON.stringify({ notes }) }),
   importAffiliates: (file: File) => uploadFile("/affiliates/import", file),
   downloadCompanyReportExcel: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/excel`, `estado-afiliados-${companyName}.xlsx`),

@@ -20,13 +20,14 @@ export default function AffiliatesList() {
   const [importing, setImporting] = useState(false);
   const [importResult, setImportResult] = useState<any | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<"normal" | "altas">("normal");
   const navigate = useNavigate();
 
   function load() {
-    api.listAffiliates().then(setAffiliates).catch(() => {});
+    api.listAffiliates(viewMode === "altas" ? { sort: "altas" } : undefined).then(setAffiliates).catch(() => {});
   }
 
-  useEffect(load, []);
+  useEffect(load, [viewMode]);
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}); }, []);
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -57,21 +58,27 @@ export default function AffiliatesList() {
       setCompanyId("");
       load();
     } catch (err: any) {
-      setError(err.message || "No se pudo crear el afiliado");
+      setError(err.message || "No se pudo crear el asociado");
     }
   }
 
   return (
     <div>
       <div className="page-header">
-        <h1>Afiliados</h1>
+        <h1>{viewMode === "altas" ? "Todas las altas" : "Asociados"}</h1>
         <div style={{ display: "flex", gap: 8 }}>
+          <button
+            className="small-button"
+            onClick={() => setViewMode((v) => (v === "altas" ? "normal" : "altas"))}
+          >
+            {viewMode === "altas" ? "Volver al listado" : "Ver todas las altas"}
+          </button>
           <label className="small-button" style={{ cursor: "pointer" }}>
             {importing ? "Importando..." : "Importar Excel"}
             <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
           </label>
           <button onClick={() => setShowForm((v) => !v)}>
-            {showForm ? "Cancelar" : "Nuevo afiliado"}
+            {showForm ? "Cancelar" : "Nuevo asociado"}
           </button>
         </div>
       </div>
@@ -101,7 +108,7 @@ export default function AffiliatesList() {
 
       {showForm && (
         <form className="inline-form" onSubmit={handleCreate}>
-          <input placeholder="N° de afiliado" value={form.affiliateNumber}
+          <input placeholder="N° de asociado" value={form.affiliateNumber}
             onChange={(e) => setForm({ ...form, affiliateNumber: e.target.value })} required />
           <input placeholder="Nombre" value={form.firstName}
             onChange={(e) => setForm({ ...form, firstName: e.target.value })} required />
@@ -124,7 +131,10 @@ export default function AffiliatesList() {
 
       <table className="data-table">
         <thead>
-          <tr><th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Estado</th></tr>
+          <tr>
+            <th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Estado</th>
+            {viewMode === "altas" && <th>Fecha de alta</th>}
+          </tr>
         </thead>
         <tbody>
           {affiliates.map((a) => (
@@ -133,6 +143,9 @@ export default function AffiliatesList() {
               <td>{a.lastName}, {a.firstName}</td>
               <td>{a.dni}</td>
               <td><span className={`badge badge-${a.status}`}>{translate(affiliateStatusLabels, a.status)}</span></td>
+              {viewMode === "altas" && (
+                <td>{new Date(a.membershipDate || a.createdAt).toLocaleDateString("es-AR")}</td>
+              )}
             </tr>
           ))}
         </tbody>
