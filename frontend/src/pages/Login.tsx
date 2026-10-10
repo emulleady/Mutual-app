@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { api } from "../api/client";
 
-export default function Login({ onLogin }: { onLogin: (token: string, role: string) => void }) {
+export default function Login({
+  onLogin,
+}: {
+  onLogin: (token: string, role: string, permissions: string[]) => void;
+}) {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -13,7 +17,7 @@ export default function Login({ onLogin }: { onLogin: (token: string, role: stri
     setLoading(true);
     try {
       const data = await api.login(username, password);
-      onLogin(data.token, data.user.role);
+      onLogin(data.token, data.user.role, data.user.permissions || []);
     } catch (err: any) {
       setError(err.message || "No se pudo iniciar sesión");
     } finally {
