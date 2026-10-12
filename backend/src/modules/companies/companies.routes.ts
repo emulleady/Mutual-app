@@ -8,6 +8,7 @@ import { AuthenticatedRequest, requireAuth, requirePermission } from "../../midd
 import { logAudit } from "../../middleware/audit";
 import { getLogoPath } from "../../shared/assets";
 import { buildCompanyReport } from "./report";
+import { buildCompanyMonthlyLiquidacion } from "./liquidacionMensual";
 
 const router = Router();
 router.use(requireAuth);
@@ -115,6 +116,20 @@ router.post("/:id/toggle-active", requirePermission("companies.manage"), async (
 // Reporte para enviarle a la empresa: estado y deuda total de cada
 // afiliado que trabaja ahí. Cualquier usuario autenticado puede
 // descargarlo (lo usan los secretarios, no solo el administrador).
+
+// Liquidación mensual para la empresa: cuotas de órdenes de compra que
+// vencen en el mes elegido (?month=AAAA-MM) y siguen impagas.
+router.get("/:id/liquidacion", async (req, res) => {
+  const id = Number(req.params.id);
+  const month = String(req.query.month || "");
+  const result = await buildCompanyMonthlyLiquidacion(id, month);
+  if (!result) return res.status(400).json({ error: "Empresa no encontrada o mes inválido (usar AAAA-MM)" });
+
+  const fileName = `liquidacion-${result.companyName.replace(/[^a-zA-Z0-9]/g, "_")}-${month}.xlsx`;
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="${fileName}"`);
+  res.send(result.buffer);
+});
 
 router.get("/:id/report/excel", async (req, res) => {
   const id = Number(req.params.id);

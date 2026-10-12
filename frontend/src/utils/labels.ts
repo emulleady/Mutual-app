@@ -43,6 +43,11 @@ export const auditEntityLabels: Record<string, string> = {
   company: "Empresa",
   user: "Usuario",
   dependent: "Familiar a cargo",
+  role: "Rol",
+  user_permissions: "Permisos de usuario",
+  agreement: "Convenio",
+  inventory_item: "Artículo de inventario",
+  inventory_loan: "Préstamo de inventario",
 };
 
 export const permissionLabels: Record<string, string> = {
@@ -55,7 +60,7 @@ export const permissionLabels: Record<string, string> = {
   "settings.manage": "Gestionar configuración (tasa de mora, numeración)",
   "companies.manage": "Gestionar empresas",
   "orders.delete": "Eliminar órdenes de compra",
-  "orders.setDate": "Cambiar la fecha de creación de una orden de compra",
+  "orders.setDate": "Cambiar la fecha y el número de una orden de compra",
   "agreements.manage": "Gestionar convenios (empresas y comercios)",
   "inventory.manage": "Gestionar inventario y préstamos de artículos",
 };

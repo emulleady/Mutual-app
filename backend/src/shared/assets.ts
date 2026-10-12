@@ -21,3 +21,20 @@ export function getLogoPath(): string | null {
   }
   return null;
 }
+
+// Logo reducido (260 px) para incrustar en planillas Excel sin que el
+// archivo pese casi 1 MB. Misma busqueda de ubicaciones que el logo grande.
+export function getSmallLogoPath(): string | null {
+  const candidates = [
+    path.join(__dirname, "..", "assets", "logo-excel.png"),
+    path.join(__dirname, "..", "..", "assets", "logo-excel.png"),
+    path.join(process.cwd(), "src", "assets", "logo-excel.png"),
+    path.join(process.cwd(), "assets", "logo-excel.png"),
+    path.join(process.cwd(), "dist", "assets", "logo-excel.png"),
+  ];
+
+  for (const candidate of candidates) {
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  return getLogoPath();
+}

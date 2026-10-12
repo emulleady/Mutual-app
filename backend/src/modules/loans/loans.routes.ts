@@ -15,7 +15,16 @@ const loanSchema = z.object({
   amount: z.number().positive(),
   installmentsCount: z.number().int().positive(),
   grantedAt: z.string().datetime().optional(),
+  // Numero de orden real (por ejemplo el del papel) en vez del automatico.
+  orderNumber: z.string().trim().min(1).optional(),
 });
+
+// "1166" -> "A-000001166". Si ya viene con letras/guion se respeta tal cual.
+function normalizeOrderNumber(raw: string): string {
+  const value = raw.trim().toUpperCase();
+  if (/^\d+$/.test(value)) return `A-${value.padStart(9, "0")}`;
+  return value;
+}
 
 // Genera el próximo número de orden de forma atómica (formato "A-000001166"),
 // para que dos altas simultáneas nunca puedan repetir número.
@@ -114,16 +123,25 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
 
   // Cambiar la fecha de la orden (por ejemplo para cargar una orden hecha
   // antes de usar el sistema) requiere un permiso especial.
-  if (data.grantedAt) {
+  if (data.grantedAt || data.orderNumber) {
     if (!req.user || !(await userHasPermission(req.user, "orders.setDate"))) {
-      return res.status(403).json({ error: "No tiene permiso para cambiar la fecha de la orden" });
+      return res.status(403).json({ error: "No tiene permiso para cambiar la fecha o el número de la orden" });
     }
+  }
+  if (data.grantedAt) {
     if (grantedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
       return res.status(400).json({ error: "La fecha de la orden no puede ser futura" });
     }
   }
 
-  const orderNumber = await nextOrderNumber();
+  let orderNumber: string;
+  if (data.orderNumber) {
+    orderNumber = normalizeOrderNumber(data.orderNumber);
+    const taken = await prisma.loan.findUnique({ where: { orderNumber } });
+    if (taken) return res.status(400).json({ error: `Ya existe la orden N° ${orderNumber}` });
+  } else {
+    orderNumber = await nextOrderNumber();
+  }
 
   const loan = await prisma.loan.create({
     data: {
@@ -239,6 +257,100 @@ router.get("/:id/forms/orden-compra", async (req, res) => {
   if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
 
   generateOrdenCompraPdf(res, loan, loan.affiliate);
+});
+
+// Corregir la fecha y/o el numero de una orden ya cargada (por ejemplo
+// ordenes hechas antes del sistema). Requiere el permiso "orders.setDate".
+// Si cambia la fecha, se recalculan los vencimientos de las cuotas que
+// todavia NO estan pagas; las pagas no se tocan.
+const editLoanSchema = z.object({
+  grantedAt: z.string().datetime().optional(),
+  orderNumber: z.string().trim().min(1).optional(),
+});
+
+router.put("/:id", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const parsed = editLoanSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const data = parsed.data;
+
+  if (!req.user || !(await userHasPermission(req.user, "orders.setDate"))) {
+    return res.status(403).json({ error: "No tiene permiso para cambiar la fecha o el número de la orden" });
+  }
+
+  const loan = await prisma.loan.findUnique({ where: { id }, include: { installments: true } });
+  if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
+
+  const updateData: { grantedAt?: Date; orderNumber?: string } = {};
+  const changes: string[] = [];
+
+  if (data.orderNumber) {
+    const orderNumber = normalizeOrderNumber(data.orderNumber);
+    if (orderNumber !== loan.orderNumber) {
+      const taken = await prisma.loan.findUnique({ where: { orderNumber } });
+      if (taken) return res.status(400).json({ error: `Ya existe la orden N° ${orderNumber}` });
+      updateData.orderNumber = orderNumber;
+      changes.push(`número ${loan.orderNumber || "(sin número)"} → ${orderNumber}`);
+    }
+  }
+
+  let newGrantedAt: Date | undefined;
+  if (data.grantedAt) {
+    newGrantedAt = new Date(data.grantedAt);
+    if (newGrantedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: "La fecha de la orden no puede ser futura" });
+    }
+    if (newGrantedAt.toDateString() !== loan.grantedAt.toDateString()) {
+      updateData.grantedAt = newGrantedAt;
+      changes.push(
+        `fecha ${loan.grantedAt.toLocaleDateString("es-AR")} → ${newGrantedAt.toLocaleDateString("es-AR")}`
+      );
+    }
+  }
+
+  if (changes.length === 0) return res.json({ ok: true, unchanged: true });
+
+  await prisma.$transaction(async (tx) => {
+    await tx.loan.update({ where: { id }, data: updateData });
+
+    if (updateData.grantedAt) {
+      const unpaid = loan.installments.filter((i) => i.status !== "paid");
+      for (const inst of unpaid) {
+        const dueDate = new Date(updateData.grantedAt);
+        dueDate.setMonth(dueDate.getMonth() + inst.number);
+        await tx.loanInstallment.update({
+          where: { id: inst.id },
+          data: { dueDate, status: "pending" },
+        });
+      }
+      // La mora calculada con las fechas viejas ya no vale: se descarta y
+      // se vuelve a calcular sola al consultar la orden.
+      await tx.loanInstallmentPenalty.deleteMany({
+        where: { loanInstallmentId: { in: unpaid.map((i) => i.id) } },
+      });
+    }
+  });
+
+  await logAffiliateEvent({
+    affiliateId: loan.affiliateId,
+    eventType: "loan_edited",
+    description: `Se corrigió la orden de compra ${loan.orderNumber || loan.id}: ${changes.join("; ")}`,
+    referenceTable: "loans",
+    referenceId: id,
+    createdByUserId: req.user?.id,
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "loan",
+    entityId: id,
+    beforeData: { orderNumber: loan.orderNumber, grantedAt: loan.grantedAt },
+    afterData: { orderNumber: updateData.orderNumber ?? loan.orderNumber, grantedAt: updateData.grantedAt ?? loan.grantedAt },
+    ipAddress: req.ip,
+  });
+
+  res.json({ ok: true });
 });
 
 // Eliminar una orden de compra por completo (junto con sus cuotas, pagos

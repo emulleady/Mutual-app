@@ -10,6 +10,17 @@ export default function Companies() {
   const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", contactName: "" });
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [liqMonth, setLiqMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [liqError, setLiqError] = useState<string | null>(null);
+
+  async function handleLiquidacion() {
+    setLiqError(null);
+    try {
+      await api.downloadCompanyLiquidacion(selected.id, selected.name, liqMonth);
+    } catch (err: any) {
+      setLiqError(err.message || "No se pudo generar la liquidación");
+    }
+  }
 
   function load() {
     api.listCompanies().then(setCompanies).catch(() => {});
@@ -57,6 +68,17 @@ export default function Companies() {
               Descargar PDF
             </button>
           </div>
+        </div>
+        <div className="inline-form" style={{ marginBottom: 16 }}>
+          <strong>Liquidación mensual para la empresa</strong>
+          <input type="month" value={liqMonth} onChange={(e) => setLiqMonth(e.target.value)} />
+          <button className="small-button" onClick={handleLiquidacion} disabled={!liqMonth}>
+            Descargar liquidación (Excel)
+          </button>
+          {liqError && <div className="error-box">{liqError}</div>}
+          <span className="note" style={{ margin: 0 }}>
+            Cuotas de órdenes de compra que vencen en ese mes y siguen impagas, de los asociados activos.
+          </span>
         </div>
         <dl className="data-list" style={{ marginBottom: 24 }}>
           <dt>CUIT</dt><dd>{selected.cuit || "—"}</dd>

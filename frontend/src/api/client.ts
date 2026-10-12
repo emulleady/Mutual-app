@@ -90,6 +90,8 @@ export const api = {
   loansByAffiliate: (affiliateId: number) => request(`/loans/affiliate/${affiliateId}`),
   getLoan: (id: number) => request(`/loans/${id}`),
   createLoan: (data: unknown) => request("/loans", { method: "POST", body: JSON.stringify(data) }),
+  updateLoan: (id: number, data: unknown) =>
+    request(`/loans/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   registerPayment: (data: unknown) =>
     request("/loans/payments", { method: "POST", body: JSON.stringify(data) }),
   downloadOrdenCompra: (loanId: number, orderNumber: string) =>
@@ -149,6 +151,8 @@ export const api = {
   importAffiliates: (file: File) => uploadFile("/affiliates/import", file),
   downloadCompanyReportExcel: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/excel`, `estado-afiliados-${companyName}.xlsx`),
+  downloadCompanyLiquidacion: (id: number, companyName: string, month: string) =>
+    downloadFile(`/companies/${id}/liquidacion?month=${month}`, `liquidacion-${companyName}-${month}.xlsx`),
   downloadCompanyReportPdf: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/pdf`, `estado-afiliados-${companyName}.pdf`),
   createDependent: (affiliateId: number, data: unknown) =>

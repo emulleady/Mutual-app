@@ -7,9 +7,12 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   const [loans, setLoans] = useState<any[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ loanType: "", amount: "", installmentsCount: "", orderDate: "" });
+  const [form, setForm] = useState({ loanType: "", amount: "", installmentsCount: "", orderDate: "", orderNumber: "" });
   const [error, setError] = useState<string | null>(null);
   const canSetDate = hasPermission("orders.setDate");
+  const [editing, setEditing] = useState(false);
+  const [editForm, setEditForm] = useState({ orderNumber: "", orderDate: "" });
+  const [editError, setEditError] = useState<string | null>(null);
 
   function loadLoans() {
     api.loansByAffiliate(affiliateId).then(setLoans).catch(() => {});
@@ -36,9 +39,10 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         ...(canSetDate && form.orderDate
           ? { grantedAt: new Date(`${form.orderDate}T12:00:00`).toISOString() }
           : {}),
+        ...(canSetDate && form.orderNumber.trim() ? { orderNumber: form.orderNumber.trim() } : {}),
       });
       setShowForm(false);
-      setForm({ loanType: "", amount: "", installmentsCount: "", orderDate: "" });
+      setForm({ loanType: "", amount: "", installmentsCount: "", orderDate: "", orderNumber: "" });
       loadLoans();
     } catch (err: any) {
       setError(err.message || "No se pudo crear la orden de compra");
@@ -52,6 +56,34 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
     const refreshed = await api.getLoan(selectedLoan.id);
     setSelectedLoan(refreshed);
     loadLoans();
+  }
+
+  async function handleEditLoan(e: React.FormEvent) {
+    e.preventDefault();
+    setEditError(null);
+    try {
+      await api.updateLoan(selectedLoan.id, {
+        orderNumber: editForm.orderNumber.trim() || undefined,
+        grantedAt: editForm.orderDate
+          ? new Date(`${editForm.orderDate}T12:00:00`).toISOString()
+          : undefined,
+      });
+      setEditing(false);
+      const refreshed = await api.getLoan(selectedLoan.id);
+      setSelectedLoan(refreshed);
+      loadLoans();
+    } catch (err: any) {
+      setEditError(err.message || "No se pudo guardar el cambio");
+    }
+  }
+
+  function startEditLoan() {
+    setEditForm({
+      orderNumber: selectedLoan.orderNumber || "",
+      orderDate: new Date(selectedLoan.grantedAt).toISOString().slice(0, 10),
+    });
+    setEditError(null);
+    setEditing(true);
   }
 
   async function handleDelete() {
@@ -69,7 +101,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   if (selectedLoan) {
     return (
       <div>
-        <button className="link-button-dark" onClick={() => setSelectedLoan(null)}>← Volver a órdenes de compra</button>
+        <button className="link-button-dark" onClick={() => { setSelectedLoan(null); setEditing(false); }}>← Volver a órdenes de compra</button>
         <div className="page-header">
           <h3>{selectedLoan.loanType} — ${selectedLoan.amount} {selectedLoan.orderNumber ? `(N° ${selectedLoan.orderNumber})` : ""}</h3>
           <button className="small-button" onClick={() => api.downloadOrdenCompra(selectedLoan.id, selectedLoan.orderNumber || String(selectedLoan.id))}>
@@ -81,7 +113,38 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
             </button>
           )}
         </div>
-        <p>Fecha de la orden: {new Date(selectedLoan.grantedAt).toLocaleDateString("es-AR")}</p>
+        <p>
+          Fecha de la orden: {new Date(selectedLoan.grantedAt).toLocaleDateString("es-AR")}{" "}
+          {canSetDate && !editing && (
+            <button className="small-button" onClick={startEditLoan}>Cambiar fecha / número</button>
+          )}
+        </p>
+        {editing && (
+          <form className="inline-form" onSubmit={handleEditLoan}>
+            <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 2 }}>
+              N° de orden
+              <input
+                value={editForm.orderNumber}
+                onChange={(e) => setEditForm({ ...editForm, orderNumber: e.target.value })}
+              />
+            </label>
+            <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 2 }}>
+              Fecha de la orden
+              <input
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={editForm.orderDate}
+                onChange={(e) => setEditForm({ ...editForm, orderDate: e.target.value })}
+              />
+            </label>
+            <p className="note" style={{ margin: 0 }}>
+              Si cambiás la fecha, se recalculan los vencimientos de las cuotas que todavía no están pagas.
+            </p>
+            {editError && <div className="error-box">{editError}</div>}
+            <button type="submit">Guardar</button>
+            <button type="button" className="small-button" onClick={() => setEditing(false)}>Cancelar</button>
+          </form>
+        )}
         <p>Estado: <span className={`badge badge-loan-${selectedLoan.status}`}>{translate(loanStatusLabels, selectedLoan.status)}</span></p>
         <table className="data-table">
           <thead>
@@ -135,6 +198,16 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
                 max={new Date().toISOString().slice(0, 10)}
                 value={form.orderDate}
                 onChange={(e) => setForm({ ...form, orderDate: e.target.value })}
+              />
+            </label>
+          )}
+          {canSetDate && (
+            <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 2 }}>
+              N° de orden (dejar vacío para el automático)
+              <input
+                placeholder="Ej: 1166 o A-000001166"
+                value={form.orderNumber}
+                onChange={(e) => setForm({ ...form, orderNumber: e.target.value })}
               />
             </label>
           )}
