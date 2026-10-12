@@ -1,13 +1,15 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { installmentStatusLabels, loanStatusLabels, translate } from "../utils/labels";
+import { hasPermission } from "../utils/permissions";
 
 export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   const [loans, setLoans] = useState<any[]>([]);
   const [selectedLoan, setSelectedLoan] = useState<any | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ loanType: "", amount: "", installmentsCount: "" });
+  const [form, setForm] = useState({ loanType: "", amount: "", installmentsCount: "", orderDate: "" });
   const [error, setError] = useState<string | null>(null);
+  const canSetDate = hasPermission("orders.setDate");
 
   function loadLoans() {
     api.loansByAffiliate(affiliateId).then(setLoans).catch(() => {});
@@ -29,9 +31,14 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         loanType: form.loanType,
         amount: Number(form.amount),
         installmentsCount: Number(form.installmentsCount),
+        // La fecha solo se manda si se cargo una (y el usuario tiene permiso).
+        // Se usa el mediodia para que no se corra de dia por la zona horaria.
+        ...(canSetDate && form.orderDate
+          ? { grantedAt: new Date(`${form.orderDate}T12:00:00`).toISOString() }
+          : {}),
       });
       setShowForm(false);
-      setForm({ loanType: "", amount: "", installmentsCount: "" });
+      setForm({ loanType: "", amount: "", installmentsCount: "", orderDate: "" });
       loadLoans();
     } catch (err: any) {
       setError(err.message || "No se pudo crear la orden de compra");
@@ -74,6 +81,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
             </button>
           )}
         </div>
+        <p>Fecha de la orden: {new Date(selectedLoan.grantedAt).toLocaleDateString("es-AR")}</p>
         <p>Estado: <span className={`badge badge-loan-${selectedLoan.status}`}>{translate(loanStatusLabels, selectedLoan.status)}</span></p>
         <table className="data-table">
           <thead>
@@ -119,6 +127,17 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
           <input placeholder="Cantidad de cuotas" type="number" value={form.installmentsCount}
             onChange={(e) => setForm({ ...form, installmentsCount: e.target.value })} required />
           {error && <div className="error-box">{error}</div>}
+          {canSetDate && (
+            <label style={{ display: "flex", flexDirection: "column", fontSize: 12, gap: 2 }}>
+              Fecha de la orden (dejar vacío para usar hoy)
+              <input
+                type="date"
+                max={new Date().toISOString().slice(0, 10)}
+                value={form.orderDate}
+                onChange={(e) => setForm({ ...form, orderDate: e.target.value })}
+              />
+            </label>
+          )}
           <button type="submit">Generar orden de compra</button>
         </form>
       )}

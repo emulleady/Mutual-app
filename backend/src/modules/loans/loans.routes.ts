@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db";
-import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
+import { AuthenticatedRequest, requireAuth, requirePermission, userHasPermission } from "../../middleware/auth";
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { recalculateOverdueInstallments } from "./mora";
 import { generateOrdenCompraPdf } from "./forms";
@@ -111,6 +111,18 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
   const data = parsed.data;
   const installmentValue = Number((data.amount / data.installmentsCount).toFixed(2));
   const grantedAt = data.grantedAt ? new Date(data.grantedAt) : new Date();
+
+  // Cambiar la fecha de la orden (por ejemplo para cargar una orden hecha
+  // antes de usar el sistema) requiere un permiso especial.
+  if (data.grantedAt) {
+    if (!req.user || !(await userHasPermission(req.user, "orders.setDate"))) {
+      return res.status(403).json({ error: "No tiene permiso para cambiar la fecha de la orden" });
+    }
+    if (grantedAt.getTime() > Date.now() + 24 * 60 * 60 * 1000) {
+      return res.status(400).json({ error: "La fecha de la orden no puede ser futura" });
+    }
+  }
+
   const orderNumber = await nextOrderNumber();
 
   const loan = await prisma.loan.create({
@@ -136,7 +148,7 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
   await logAffiliateEvent({
     affiliateId: data.affiliateId,
     eventType: "loan_granted",
-    description: `Otorgamiento de orden de compra ${data.loanType} por $${data.amount} en ${data.installmentsCount} cuotas`,
+    description: `Otorgamiento de orden de compra ${data.loanType} por $${data.amount} en ${data.installmentsCount} cuotas${data.grantedAt ? ` (fecha de la orden cargada manualmente: ${grantedAt.toLocaleDateString("es-AR")})` : ""}`,
     referenceTable: "loans",
     referenceId: loan.id,
     createdByUserId: req.user?.id,

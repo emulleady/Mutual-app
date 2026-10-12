@@ -35,6 +35,7 @@ async function main() {
     "settings.manage",
     "companies.manage",
     "orders.delete",
+    "orders.setDate",
     "agreements.manage",
     "inventory.manage",
   ];

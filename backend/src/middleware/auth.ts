@@ -52,6 +52,26 @@ export async function requireAuth(
   }
 }
 
+// Indica si el usuario tiene un permiso (por su rol o por un permiso
+// individual). El Administrador siempre tiene acceso total, aunque todavia
+// no se hayan sembrado en la base los permisos mas nuevos.
+export async function userHasPermission(
+  user: NonNullable<AuthenticatedRequest["user"]>,
+  permissionKey: string
+): Promise<boolean> {
+  if (user.roleName === "Administrador") return true;
+
+  const [fromRole, fromUser] = await Promise.all([
+    prisma.rolePermission.findFirst({
+      where: { roleId: user.roleId, permission: { key: permissionKey } },
+    }),
+    prisma.userPermission.findFirst({
+      where: { userId: user.id, permission: { key: permissionKey } },
+    }),
+  ]);
+  return !!fromRole || !!fromUser;
+}
+
 // Middleware de autorizacion: exige que el rol del usuario, O un permiso
 // otorgado directamente a ese usuario puntual, incluya el permiso pedido.
 // Se verifica en el backend, no alcanza con ocultar botones en el frontend.
@@ -61,22 +81,7 @@ export function requirePermission(permissionKey: string) {
       return res.status(401).json({ error: "No autenticado" });
     }
 
-    // El Administrador tiene acceso total siempre, aunque todavia no se
-    // hayan sembrado en la base los permisos mas nuevos.
-    if (req.user.roleName === "Administrador") {
-      return next();
-    }
-
-    const [fromRole, fromUser] = await Promise.all([
-      prisma.rolePermission.findFirst({
-        where: { roleId: req.user.roleId, permission: { key: permissionKey } },
-      }),
-      prisma.userPermission.findFirst({
-        where: { userId: req.user.id, permission: { key: permissionKey } },
-      }),
-    ]);
-
-    if (!fromRole && !fromUser) {
+    if (!(await userHasPermission(req.user, permissionKey))) {
       return res.status(403).json({ error: "No tiene permiso para esta accion" });
     }
 

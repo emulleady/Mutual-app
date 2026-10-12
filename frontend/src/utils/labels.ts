@@ -55,6 +55,7 @@ export const permissionLabels: Record<string, string> = {
   "settings.manage": "Gestionar configuración (tasa de mora, numeración)",
   "companies.manage": "Gestionar empresas",
   "orders.delete": "Eliminar órdenes de compra",
+  "orders.setDate": "Cambiar la fecha de creación de una orden de compra",
   "agreements.manage": "Gestionar convenios (empresas y comercios)",
   "inventory.manage": "Gestionar inventario y préstamos de artículos",
 };

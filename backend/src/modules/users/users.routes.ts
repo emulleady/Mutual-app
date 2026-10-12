@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
+import { ensurePermissionsExist } from "./permissionCatalog";
 
 const router = Router();
 router.use(requireAuth);
@@ -55,6 +56,7 @@ router.get("/roles", async (_req, res) => {
 
 // Catalogo de todos los permisos que existen en el sistema.
 router.get("/permissions", async (_req, res) => {
+  await ensurePermissionsExist();
   const permissions = await prisma.permission.findMany({ orderBy: { key: "asc" } });
   res.json(permissions.map((p: any) => p.key));
 });
@@ -74,6 +76,7 @@ router.post("/roles", async (req: AuthenticatedRequest, res) => {
   const existing = await prisma.role.findUnique({ where: { name: data.name } });
   if (existing) return res.status(400).json({ error: "Ya existe un rol con ese nombre" });
 
+  await ensurePermissionsExist();
   const permissions = await prisma.permission.findMany({
     where: { key: { in: data.permissionKeys } },
   });
@@ -122,6 +125,7 @@ router.put("/roles/:id", async (req: AuthenticatedRequest, res) => {
     if (clash) return res.status(400).json({ error: "Ya existe un rol con ese nombre" });
   }
 
+  await ensurePermissionsExist();
   const permissions = await prisma.permission.findMany({
     where: { key: { in: data.permissionKeys } },
   });
@@ -226,6 +230,7 @@ router.get("/:id/permissions", async (req, res) => {
   const user = await prisma.user.findUnique({ where: { id } });
   if (!user) return res.status(404).json({ error: "Usuario no encontrado" });
 
+  await ensurePermissionsExist();
   const [allPermissions, rolePerms, userPerms] = await Promise.all([
     prisma.permission.findMany({ orderBy: { key: "asc" } }),
     prisma.rolePermission.findMany({ where: { roleId: user.roleId } }),
