@@ -146,8 +146,11 @@ export const api = {
     return request(`/inventory/loans${s ? `?${s}` : ""}`);
   },
   createInventoryLoan: (data: unknown) => request("/inventory/loans", { method: "POST", body: JSON.stringify(data) }),
-  returnInventoryLoan: (id: number, notes?: string) =>
-    request(`/inventory/loans/${id}/return`, { method: "POST", body: JSON.stringify({ notes }) }),
+  returnInventoryLoan: (id: number, data?: { kmIn?: number; notes?: string }) =>
+    request(`/inventory/loans/${id}/return`, { method: "POST", body: JSON.stringify(data || {}) }),
+  createInventoryPurchase: (itemId: number, data: unknown) =>
+    request(`/inventory/items/${itemId}/purchases`, { method: "POST", body: JSON.stringify(data) }),
+  getInventorySummary: (month: string) => request(`/inventory/summary?month=${month}`),
   importAffiliates: (file: File) => uploadFile("/affiliates/import", file),
   downloadCompanyReportExcel: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/excel`, `estado-afiliados-${companyName}.xlsx`),

@@ -317,10 +317,13 @@ model InventoryItem {
   id        Int      @id @default(autoincrement())
   name      String
   quantity  Int      @default(0) // cantidad total que tiene la mutual
+  unitValue Float    @default(0) // valor de una unidad (para valuar el inventario)
+  trackKm   Boolean  @default(false) // vehiculos: pide kilometraje al prestar/devolver
   active    Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   loans     InventoryLoan[]
+  purchases InventoryPurchase[]
 
   @@map("inventory_items")
 }
@@ -336,10 +339,30 @@ model InventoryLoan {
   returnedAt       DateTime?
   notes            String?
   createdByUserId  Int?
+  // Valor de la unidad al momento de entregar (para que los totales del
+  // mes no cambien si despues se actualiza el valor del articulo).
+  unitValueAtLoan  Float     @default(0)
+  kmOut            Int?      // kilometraje al entregar (vehiculos)
+  kmIn             Int?      // kilometraje al devolver (vehiculos)
   item             InventoryItem @relation(fields: [itemId], references: [id])
   affiliate        Affiliate?    @relation(fields: [affiliateId], references: [id])
 
   @@map("inventory_loans")
+}
+
+// Compras de articulos: suman stock y quedan registradas con su costo, para
+// saber cuanto se gasto en el mes.
+model InventoryPurchase {
+  id              Int       @id @default(autoincrement())
+  itemId          Int
+  quantity        Int
+  unitCost        Float
+  purchasedAt     DateTime  @default(now())
+  notes           String?
+  createdByUserId Int?
+  item            InventoryItem @relation(fields: [itemId], references: [id])
+
+  @@map("inventory_purchases")
 }
 
 // Auditoria tecnica: solo INSERT desde la aplicacion, ningun rol puede
