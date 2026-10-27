@@ -83,10 +83,10 @@ export const api = {
     request("/affiliates", { method: "POST", body: JSON.stringify(data) }),
   updateAffiliate: (id: number, data: unknown) =>
     request(`/affiliates/${id}`, { method: "PUT", body: JSON.stringify(data) }),
-  deactivateAffiliate: (id: number) =>
-    request(`/affiliates/${id}/deactivate`, { method: "POST" }),
-  activateAffiliate: (id: number) =>
-    request(`/affiliates/${id}/activate`, { method: "POST" }),
+  deactivateAffiliate: (id: number, data?: { date?: string; note?: string }) =>
+    request(`/affiliates/${id}/deactivate`, { method: "POST", body: JSON.stringify(data || {}) }),
+  activateAffiliate: (id: number, data?: { date?: string; companyId?: number | null; note?: string }) =>
+    request(`/affiliates/${id}/activate`, { method: "POST", body: JSON.stringify(data || {}) }),
   loansByAffiliate: (affiliateId: number) => request(`/loans/affiliate/${affiliateId}`),
   getLoan: (id: number) => request(`/loans/${id}`),
   createLoan: (data: unknown) => request("/loans", { method: "POST", body: JSON.stringify(data) }),

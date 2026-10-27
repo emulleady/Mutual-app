@@ -8,6 +8,17 @@ import { importAffiliatesFromExcel } from "./import";
 import { generateFichaAltaPdf, generateFichaFamiliaresPdf } from "./forms";
 import { buildLiquidacionWorkbook } from "./liquidacion";
 
+function parseBodyDate(value: unknown): Date | null {
+  if (typeof value !== "string" || !value) return null;
+  // "YYYY-MM-DD" se toma al mediodia para que no cambie de dia por la zona horaria
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(value) ? new Date(`${value}T12:00:00-03:00`) : new Date(value);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function fmtDate(d: Date): string {
+  return d.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+}
+
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
 
@@ -100,6 +111,7 @@ router.get("/:id", async (req, res) => {
       branch: true,
       company: true,
       dependents: { orderBy: { fullName: "asc" } },
+      periods: { orderBy: { startDate: "desc" }, include: { company: true } },
     },
   });
 
@@ -131,6 +143,10 @@ router.post("/", requirePermission("affiliates.create"), async (req: Authenticat
       companyId: data.companyId ?? null,
       membershipDate: data.membershipDate ? new Date(data.membershipDate) : new Date(),
     },
+  });
+
+  await prisma.affiliateMembershipPeriod.create({
+    data: { affiliateId: created.id, companyId: created.companyId, startDate: created.membershipDate ?? new Date() },
   });
 
   await logAffiliateEvent({
@@ -202,8 +218,9 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
   res.json(updated);
 });
 
-// Baja logica: nunca se borra el registro, solo cambia el estado
-// (consistente con "nada se borra" del diseño).
+// Baja logica: nunca se borra el registro. Se puede indicar la fecha real
+// de la baja (si no, hoy). Cierra el periodo vigente y deja todo el
+// historial (ordenes, pagos, eventos) en el mismo asociado.
 router.post("/:id/deactivate", requirePermission("affiliates.deactivate"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
   const before = await prisma.affiliate.findUnique({ where: { id } });
@@ -211,15 +228,42 @@ router.post("/:id/deactivate", requirePermission("affiliates.deactivate"), async
     return res.status(404).json({ error: "Afiliado no encontrado" });
   }
 
+  const date = parseBodyDate(req.body?.date) ?? new Date();
+  if (date.getTime() > Date.now() + 24 * 3600 * 1000) {
+    return res.status(400).json({ error: "La fecha de baja no puede ser futura" });
+  }
+  const note = typeof req.body?.note === "string" && req.body.note.trim() ? req.body.note.trim() : null;
+
+  const open = await prisma.affiliateMembershipPeriod.findFirst({
+    where: { affiliateId: id, endDate: null },
+    orderBy: { startDate: "desc" },
+  });
+  if (open) {
+    await prisma.affiliateMembershipPeriod.update({
+      where: { id: open.id },
+      data: { endDate: date < open.startDate ? open.startDate : date, note: note ?? open.note },
+    });
+  } else {
+    // Asociados anteriores a este control: se crea el periodo ya cerrado.
+    const start = before.membershipDate ?? before.createdAt;
+    await prisma.affiliateMembershipPeriod.create({
+      data: { affiliateId: id, companyId: before.companyId, startDate: start, endDate: date < start ? start : date, note },
+    });
+  }
+
   const updated = await prisma.affiliate.update({
     where: { id },
-    data: { status: "inactive" },
+    data: {
+      status: "inactive",
+      // se completa la planilla historica: primera baja, o segunda si ya habia una
+      ...(before.leaveDate1 ? { leaveDate2: date } : { leaveDate1: date }),
+    },
   });
 
   await logAffiliateEvent({
     affiliateId: id,
     eventType: "affiliate_deactivated",
-    description: "Afiliado dado de baja",
+    description: `Afiliado dado de baja el ${fmtDate(date)}${note ? ` (${note})` : ""}`,
     createdByUserId: req.user?.id,
   });
 
@@ -236,24 +280,56 @@ router.post("/:id/deactivate", requirePermission("affiliates.deactivate"), async
   res.json(updated);
 });
 
-// Reactivar un afiliado dado de baja (misma logica inversa: cambia
-// status, nunca se toca ningun otro dato).
+// Re-alta: mismo asociado (mismo N°, DNI e historial), con la fecha real
+// de alta y, si corresponde, en otra empresa. Abre un nuevo periodo.
 router.post("/:id/activate", requirePermission("affiliates.deactivate"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
-  const before = await prisma.affiliate.findUnique({ where: { id } });
+  const before = await prisma.affiliate.findUnique({ where: { id }, include: { company: true } });
   if (!before) {
     return res.status(404).json({ error: "Afiliado no encontrado" });
   }
 
-  const updated = await prisma.affiliate.update({
-    where: { id },
-    data: { status: "active" },
+  const date = parseBodyDate(req.body?.date) ?? new Date();
+  if (date.getTime() > Date.now() + 24 * 3600 * 1000) {
+    return res.status(400).json({ error: "La fecha de alta no puede ser futura" });
+  }
+  const note = typeof req.body?.note === "string" && req.body.note.trim() ? req.body.note.trim() : null;
+
+  let companyId = before.companyId;
+  if (req.body?.companyId !== undefined && req.body.companyId !== "") {
+    const requested = req.body.companyId === null ? null : Number(req.body.companyId);
+    if (requested !== null) {
+      const company = await prisma.company.findUnique({ where: { id: requested } });
+      if (!company) return res.status(400).json({ error: "Empresa inexistente" });
+    }
+    companyId = requested;
+  }
+
+  // Si quedara un periodo abierto (datos viejos), se cierra antes de abrir el nuevo.
+  await prisma.affiliateMembershipPeriod.updateMany({
+    where: { affiliateId: id, endDate: null },
+    data: { endDate: date },
+  });
+  await prisma.affiliateMembershipPeriod.create({
+    data: { affiliateId: id, companyId, startDate: date, note },
   });
 
+  const updated = await prisma.affiliate.update({
+    where: { id },
+    data: { status: "active", companyId, reEntryDate: date },
+    include: { company: true },
+  });
+
+  const changed = companyId !== before.companyId;
   await logAffiliateEvent({
     affiliateId: id,
     eventType: "affiliate_reactivated",
-    description: "Afiliado reactivado",
+    description:
+      `Re-alta el ${fmtDate(date)}` +
+      (changed
+        ? ` — cambió de empresa: ${before.company?.name ?? "sin empresa"} → ${updated.company?.name ?? "sin empresa"}`
+        : updated.company ? ` en ${updated.company.name}` : "") +
+      (note ? ` (${note})` : ""),
     createdByUserId: req.user?.id,
   });
 

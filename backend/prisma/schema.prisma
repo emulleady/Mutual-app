@@ -93,6 +93,7 @@ model Company {
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   affiliates  Affiliate[]
+  periods     AffiliateMembershipPeriod[]
 
   @@map("companies")
 }
@@ -138,6 +139,7 @@ model Affiliate {
   loans          Loan[]
   dependents     Dependent[]
   inventoryLoans InventoryLoan[]
+  periods        AffiliateMembershipPeriod[]
 
   @@map("affiliates")
 }
@@ -380,4 +382,22 @@ model AuditLog {
   user       User?    @relation(fields: [userId], references: [id])
 
   @@map("audit_logs")
+}
+
+// Periodos de pertenencia: cada alta/baja queda registrada con su fecha real
+// y la empresa de ese momento. El asociado es SIEMPRE el mismo registro
+// (mismo historial de ordenes, pagos y eventos), aunque se reincorpore
+// meses despues o en otra empresa.
+model AffiliateMembershipPeriod {
+  id          Int       @id @default(autoincrement())
+  affiliateId Int
+  companyId   Int?
+  startDate   DateTime  // alta real
+  endDate     DateTime? // baja (null = vigente)
+  note        String?
+  createdAt   DateTime  @default(now())
+  affiliate   Affiliate @relation(fields: [affiliateId], references: [id])
+  company     Company?  @relation(fields: [companyId], references: [id])
+
+  @@map("affiliate_membership_periods")
 }

@@ -30,6 +30,7 @@ const COLUMNS = [
   "province",             // V - Provincia
   "phone",                // W - Telefono
   "email",                // X - Email
+  "membershipDate",       // Y - Fecha de alta real (opcional)
 ] as const;
 
 type RawRow = Record<(typeof COLUMNS)[number], any>;
@@ -184,15 +185,21 @@ export async function importAffiliatesFromExcel(
         healthProviderEntryDate: toDate(raw.healthProviderEntryDate),
         registryStatus,
       };
+      // Fecha real de alta: solo se pisa si la planilla la trae.
+      const membershipDate = toDate(raw.membershipDate);
+      const dataWithAlta = membershipDate ? { ...data, membershipDate } : data;
 
       try {
         const existing = await prisma.affiliate.findUnique({ where: { affiliateNumber } });
         let affiliate;
         if (existing) {
-          affiliate = await prisma.affiliate.update({ where: { id: existing.id }, data });
+          affiliate = await prisma.affiliate.update({ where: { id: existing.id }, data: dataWithAlta });
           result.titularsUpdated++;
         } else {
-          affiliate = await prisma.affiliate.create({ data });
+          affiliate = await prisma.affiliate.create({ data: dataWithAlta });
+          await prisma.affiliateMembershipPeriod.create({
+            data: { affiliateId: affiliate.id, companyId: affiliate.companyId, startDate: membershipDate ?? new Date() },
+          });
           result.titularsCreated++;
           await logAffiliateEvent({
             affiliateId: affiliate.id,

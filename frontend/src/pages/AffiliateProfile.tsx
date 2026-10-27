@@ -91,14 +91,33 @@ export default function AffiliateProfile() {
     }
   }
 
-  async function handleToggleStatus() {
-    if (affiliate.status === "active") {
-      if (!window.confirm("¿Dar de baja a este asociado? No se pierde su historial.")) return;
-      await api.deactivateAffiliate(affiliate.id);
-    } else {
-      await api.activateAffiliate(affiliate.id);
+  const today = new Date().toISOString().slice(0, 10);
+  const [statusDialog, setStatusDialog] = useState<null | { date: string; companyId: string; note: string }>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+
+  function handleToggleStatus() {
+    setStatusError(null);
+    setStatusDialog({ date: today, companyId: affiliate.companyId ? String(affiliate.companyId) : "", note: "" });
+  }
+
+  async function confirmStatusChange(e: React.FormEvent) {
+    e.preventDefault();
+    if (!statusDialog) return;
+    try {
+      if (affiliate.status === "active") {
+        await api.deactivateAffiliate(affiliate.id, { date: statusDialog.date, note: statusDialog.note });
+      } else {
+        await api.activateAffiliate(affiliate.id, {
+          date: statusDialog.date,
+          companyId: statusDialog.companyId ? Number(statusDialog.companyId) : null,
+          note: statusDialog.note,
+        });
+      }
+      setStatusDialog(null);
+      load();
+    } catch (err: any) {
+      setStatusError(err.message || "No se pudo guardar");
     }
-    load();
   }
 
   async function handleDownloadLiquidacion() {
@@ -178,6 +197,40 @@ export default function AffiliateProfile() {
         <button className={tab === "familiares" ? "active" : ""} onClick={() => setTab("familiares")}>Familiares</button>
         <button className={tab === "historial" ? "active" : ""} onClick={() => setTab("historial")}>Historial</button>
       </div>
+
+      {statusDialog && (
+        <form onSubmit={confirmStatusChange} className="tab-panel" style={{ border: "1px solid #ccc", borderRadius: 8, padding: 16, marginBottom: 16 }}>
+          <h3>{affiliate.status === "active" ? "Dar de baja" : "Re-alta del asociado"}</h3>
+          <p style={{ fontSize: 13, opacity: 0.8 }}>
+            {affiliate.status === "active"
+              ? "Se conserva todo su historial (órdenes, pagos, eventos)."
+              : "Es el mismo asociado: se conserva todo su historial anterior. Indicá la fecha real de alta y, si cambió, la nueva empresa."}
+          </p>
+          <label>
+            {affiliate.status === "active" ? "Fecha de baja" : "Fecha real de alta"}
+            <input type="date" required max={today} value={statusDialog.date}
+              onChange={(e) => setStatusDialog({ ...statusDialog, date: e.target.value })} />
+          </label>
+          {affiliate.status !== "active" && (
+            <label>
+              Empresa
+              <select value={statusDialog.companyId} onChange={(e) => setStatusDialog({ ...statusDialog, companyId: e.target.value })}>
+                <option value="">Sin empresa</option>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+          )}
+          <label>
+            Nota (opcional)
+            <input type="text" value={statusDialog.note} onChange={(e) => setStatusDialog({ ...statusDialog, note: e.target.value })} />
+          </label>
+          {statusError && <p className="error">{statusError}</p>}
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button type="submit" className="small-button">Confirmar</button>
+            <button type="button" className="small-button" onClick={() => setStatusDialog(null)}>Cancelar</button>
+          </div>
+        </form>
+      )}
 
       {tab === "resumen" && (
         <div className="tab-panel">
@@ -386,6 +439,25 @@ export default function AffiliateProfile() {
 
       {tab === "historial" && (
         <div className="tab-panel">
+          {affiliate.periods && affiliate.periods.length > 0 && (
+            <>
+              <h4>Períodos como asociado</h4>
+              <table>
+                <thead><tr><th>Alta</th><th>Baja</th><th>Empresa</th><th>Nota</th></tr></thead>
+                <tbody>
+                  {affiliate.periods.map((p: any) => (
+                    <tr key={p.id}>
+                      <td>{new Date(p.startDate).toLocaleDateString("es-AR")}</td>
+                      <td>{p.endDate ? new Date(p.endDate).toLocaleDateString("es-AR") : "Vigente"}</td>
+                      <td>{p.company?.name || "—"}</td>
+                      <td>{p.note || ""}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <h4>Eventos</h4>
+            </>
+          )}
           <ul className="timeline">
             {affiliate.events.map((e: any) => (
               <li key={e.id}>
