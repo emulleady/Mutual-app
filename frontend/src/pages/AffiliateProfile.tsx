@@ -360,7 +360,7 @@ export default function AffiliateProfile() {
             <h3>Familiares a cargo</h3>
             <div style={{ display: "flex", gap: 8 }}>
               <button className="small-button" onClick={() => api.downloadFichaFamiliares(affiliate.id, `${affiliate.lastName}-${affiliate.firstName}`)}>
-                Ficha de Familiares (PDF)
+                Ficha de Familiares + Actualización de datos (PDF)
               </button>
               <button onClick={() => setShowDependentForm((v) => !v)}>
                 {showDependentForm ? "Cancelar" : "Agregar familiar"}

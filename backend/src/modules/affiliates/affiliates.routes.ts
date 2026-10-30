@@ -463,7 +463,7 @@ router.get("/:id/forms/alta", async (req, res) => {
 
 router.get("/:id/forms/familiares", async (req, res) => {
   const id = Number(req.params.id);
-  const affiliate = await prisma.affiliate.findUnique({ where: { id } });
+  const affiliate = await prisma.affiliate.findUnique({ where: { id }, include: { company: true } });
   if (!affiliate) return res.status(404).json({ error: "Afiliado no encontrado" });
 
   const dependents = await prisma.dependent.findMany({

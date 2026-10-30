@@ -104,9 +104,28 @@ export function fieldLine(
     .stroke();
 }
 
+
+// Casilleros "Casa / Dpto." dibujados (la fuente estandar del PDF no tiene
+// los simbolos de casillero y salian como "&").
+export function drawCasaDpto(doc: PDFKit.PDFDocument, type: string | null | undefined, floorApt: string | null | undefined, x: number, y: number, size: number = 9) {
+  doc.fontSize(size).font("Helvetica-Bold").fillColor("#000000");
+  let cx = x;
+  for (const label of ["Casa", "Dpto."]) {
+    doc.text(label, cx, y, { lineBreak: false });
+    cx += doc.widthOfString(label) + 3;
+    doc.rect(cx, y + 0.5, 8, 8).strokeColor("#333333").lineWidth(0.7).stroke();
+    const checked = (label === "Casa" && type === "Casa") || (label === "Dpto." && type === "Dpto");
+    if (checked) {
+      doc.moveTo(cx + 1.5, y + 2).lineTo(cx + 6.5, y + 7).moveTo(cx + 6.5, y + 2).lineTo(cx + 1.5, y + 7).strokeColor("#000000").lineWidth(1).stroke();
+    }
+    cx += 8 + 8;
+  }
+  doc.text(`Piso: ${floorApt || ""}`, cx, y, { lineBreak: false });
+}
+
 export function fmtDate(d: Date | null | undefined) {
   if (!d) return "";
-  return new Date(d).toLocaleDateString("es-AR");
+  return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Argentina/Buenos_Aires" });
 }
 
 // Genera la Ficha de Alta del titular, replicando el formulario en papel
@@ -146,11 +165,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
 
   fieldLine(doc, "Domicilio:", affiliate.address || "", 35, y, 60, 255);
   fieldLine(doc, "N°:", affiliate.addressNumber || "", 310, y, 22, 95);
-  doc.fontSize(9).font("Helvetica-Bold").text(
-    `Casa ${affiliate.addressType === "Casa" ? "☒" : "☐"}  Dpto. ${affiliate.addressType === "Dpto" ? "☒" : "☐"}  Piso: ${affiliate.floorApt || ""}`,
-    420,
-    y
-  );
+  drawCasaDpto(doc, affiliate.addressType, affiliate.floorApt, 420, y);
   y += 20;
 
   fieldLine(doc, "Localidad:", affiliate.locality || "", 35, y, 60, 255);
@@ -273,10 +288,7 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
 
       fieldLine(doc, "Domicilio:", dep?.address || "", 35, y, 60, 190);
       fieldLine(doc, "N°:", dep?.addressNumber || "", 235, y, 20, 75);
-      doc
-        .fontSize(8.5)
-        .font("Helvetica-Bold")
-        .text(`Casa ${dep?.addressType === "Casa" ? "☒" : "☐"}  Dpto. ${dep?.addressType === "Dpto" ? "☒" : "☐"}  Piso: ${dep?.floorApt || ""}`, 330, y);
+      drawCasaDpto(doc, dep?.addressType, dep?.floorApt, 330, y, 8.5);
       y += 19;
 
       fieldLine(doc, "Localidad:", dep?.locality || "", 35, y, 60, 255);
@@ -284,7 +296,7 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
       y += 19;
 
       fieldLine(doc, "Teléfono:", dep?.phone || "", 35, y, 55, 255);
-      fieldLine(doc, "Correo electrónico:", dep?.email || "", 310, y, 100, 250);
+      fieldLine(doc, "Correo:", dep?.email || "", 310, y, 42, 250);
       y += 28;
 
       doc.moveTo(35, y - 6).lineTo(560, y - 6).strokeColor("#dddddd").lineWidth(0.5).stroke();
@@ -300,6 +312,75 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
 
     drawFooter(doc, 760);
   });
+
+  // ---- Ultima hoja: ACTUALIZACION DE DATOS del asociado titular ----
+  // Se imprime siempre despues de las hojas de participantes, con los datos
+  // del titular ya cargados, para que firme la actualizacion.
+  doc.addPage();
+  drawLetterhead(doc);
+  doc.fontSize(17).font("Helvetica-Bold").fillColor("#000000")
+    .text("ACTUALIZACION DE DATOS", 35, 112, { width: 525, align: "center", underline: true });
+
+  let y2 = 150;
+  doc.fontSize(10.5).font("Helvetica-Bold").text("Datos del Asociado/a", 35, y2, { underline: true });
+  y2 += 22;
+
+  const titularNumber = `${String(affiliate.affiliateNumber || "").split("/")[0]}/00`;
+  fieldLine(doc, "Nombre completo:", `${affiliate.lastName} ${affiliate.firstName}`.trim(), 35, y2, 95, 525);
+  y2 += 22;
+  fieldLine(doc, "C.U.I.L.:", affiliate.cuil || "", 35, y2, 50, 285);
+  fieldLine(doc, "N° de Asoc.:", titularNumber, 340, y2, 68, 220);
+  y2 += 22;
+  fieldLine(doc, "Fecha de Nac.:", fmtDate(affiliate.birthDate), 35, y2, 78, 255);
+  fieldLine(doc, "Teléfono de contacto:", affiliate.phone || "", 310, y2, 110, 250);
+  y2 += 22;
+  fieldLine(doc, "Domicilio:", affiliate.address || "", 35, y2, 60, 255);
+  fieldLine(doc, "N°:", affiliate.addressNumber || "", 310, y2, 22, 95);
+  drawCasaDpto(doc, affiliate.addressType, affiliate.floorApt, 420, y2);
+  y2 += 22;
+  fieldLine(doc, "Localidad:", affiliate.locality || "", 35, y2, 60, 255);
+  fieldLine(doc, "Provincia:", affiliate.province || "", 310, y2, 60, 250);
+  y2 += 22;
+  fieldLine(doc, "Correo electrónico:", affiliate.email || "", 35, y2, 100, 525);
+  y2 += 22;
+  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y2, 55, 285);
+  fieldLine(doc, "Tipo de Socio:", affiliate.socioType || "", 340, y2, 75, 220);
+  y2 += 28;
+
+  doc.moveTo(35, y2).lineTo(560, y2).strokeColor("#333333").lineWidth(1).stroke();
+  y2 += 14;
+  doc.fontSize(10.5).font("Helvetica-Bold").text("Declaración del Asociado/a", 35, y2, { underline: true });
+  y2 += 16;
+
+  const paragraphs = [
+    "Por medio del presente según establece la ley 20.321, solicito El Alta Voluntaria a la Mutual de " +
+      "Trabajadores Petrolero Privado de Tierra del Fuego. Declaro haber sido informado/a de los beneficios y " +
+      "descuentos que posee la Asociación, como así también de los derechos y obligaciones como asociado a la " +
+      "misma, por lo que esta decisión es tomada por mi voluntad libre y consciente.",
+    "Por la presente y de conformidad con los Art. N.° 146 de la ley 20.744 otorgo mi expreso consentimiento en " +
+      "mi calidad de asociado a la MUTUAL TRABAJADORES PETROLERO PRIVADO TIERRA DEL FUEGO para que la misma " +
+      "proceda a practicar los descuentos correspondientes sobre los haberes que deba percibir en la empresa que " +
+      "trabajo, por el monto y en las condiciones de la presente.",
+    "En caso de extinción de mi relación de trabajo con la empresa autorizo a la MUTUAL TRABAJADORES PETROLERO " +
+      "PRIVADO TIERRA DEL FUEGO a descontar de las remuneraciones que en cualquier carácter deba percibir en la " +
+      "dependencia el saldo que quedara pendiente de la presente autorización con absoluta prioridad respecto de " +
+      "los otros saldos, que en mi carácter de dependencia de la empresa pudiera adeudar por cualquier causa o " +
+      "emergentes de otros créditos que fueran otorgados.",
+  ];
+  doc.fontSize(10).font("Helvetica");
+  paragraphs.forEach((t) => {
+    doc.text(t, 35, y2, { width: 525, align: "justify", lineGap: 1.5 });
+    y2 = doc.y + 8;
+  });
+
+  y2 += 6;
+  const today = fmtDate(new Date());
+  fieldLine(doc, "Asimismo, solicito que la misma tenga efecto a partir del día:", today, 35, y2, 300, 525);
+  y2 += 60;
+  fieldLine(doc, "Firma del Asociado:", "", 35, y2, 100, 255);
+  fieldLine(doc, "Aclaración del Asoc.:", "", 310, y2, 105, 250);
+
+  drawFooter(doc, 762);
 
   doc.end();
 }
