@@ -7,9 +7,31 @@ export default function Companies() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", contactName: "" });
+  const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "", contactName: "", contactEmail: "", contactMobile: "" });
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState<string | null>(null);
+  const [importErrors, setImportErrors] = useState<any[]>([]);
+
+  async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportMsg(null);
+    setImportErrors([]);
+    try {
+      const r = await api.importCompanies(file);
+      setImportMsg(`Empresas: ${r.created} nuevas, ${r.updated} actualizadas.`);
+      setImportErrors(r.errors || []);
+      load();
+    } catch (err: any) {
+      setImportMsg(err.message || "No se pudo importar el archivo");
+    } finally {
+      setImporting(false);
+      e.target.value = "";
+    }
+  }
   const [liqMonth, setLiqMonth] = useState(new Date().toISOString().slice(0, 7));
   const [liqError, setLiqError] = useState<string | null>(null);
 
@@ -38,7 +60,7 @@ export default function Companies() {
     try {
       await api.createCompany(form);
       setShowForm(false);
-      setForm({ name: "", cuit: "", address: "", phone: "", contactName: "" });
+      setForm({ name: "", cuit: "", address: "", phone: "", email: "", contactName: "", contactEmail: "", contactMobile: "" });
       load();
     } catch (err: any) {
       setError(err.message || "No se pudo crear la empresa");
@@ -84,7 +106,10 @@ export default function Companies() {
           <dt>CUIT</dt><dd>{selected.cuit || "—"}</dd>
           <dt>Dirección</dt><dd>{selected.address || "—"}</dd>
           <dt>Teléfono</dt><dd>{selected.phone || "—"}</dd>
-          <dt>Contacto</dt><dd>{selected.contactName || "—"}</dd>
+          <dt>Email</dt><dd style={{ whiteSpace: "pre-line" }}>{selected.email || "—"}</dd>
+          <dt>Contacto</dt><dd style={{ whiteSpace: "pre-line" }}>{selected.contactName || "—"}</dd>
+          <dt>Email de contacto</dt><dd style={{ whiteSpace: "pre-line" }}>{selected.contactEmail || "—"}</dd>
+          <dt>Celular de contacto</dt><dd style={{ whiteSpace: "pre-line" }}>{selected.contactMobile || "—"}</dd>
         </dl>
 
         <h3>Asociados activos en esta empresa ({selected.affiliates.length})</h3>
@@ -121,8 +146,22 @@ export default function Companies() {
     <div>
       <div className="page-header">
         <h1>Empresas</h1>
-        <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva empresa"}</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <label className="small-button" style={{ cursor: "pointer" }}>
+            {importing ? "Importando..." : "Importar Excel"}
+            <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
+          </label>
+          <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva empresa"}</button>
+        </div>
       </div>
+      {importMsg && (
+        <div className="tab-panel" style={{ marginBottom: 16 }}>
+          <p>{importMsg}</p>
+          {importErrors.length > 0 && (
+            <ul>{importErrors.map((er, i) => <li key={i}>Fila {er.row}: {er.reason}</li>)}</ul>
+          )}
+        </div>
+      )}
       <p className="note">
         Empresas donde trabajan los asociados, usadas para el descuento por recibo de sueldo.
       </p>
@@ -137,8 +176,14 @@ export default function Companies() {
             onChange={(e) => setForm({ ...form, address: e.target.value })} />
           <input placeholder="Teléfono" value={form.phone}
             onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+          <input placeholder="Email de la empresa" value={form.email}
+            onChange={(e) => setForm({ ...form, email: e.target.value })} />
           <input placeholder="Contacto (nombre)" value={form.contactName}
             onChange={(e) => setForm({ ...form, contactName: e.target.value })} />
+          <input placeholder="Email de contacto" value={form.contactEmail}
+            onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
+          <input placeholder="Celular de contacto" value={form.contactMobile}
+            onChange={(e) => setForm({ ...form, contactMobile: e.target.value })} />
           {error && <div className="error-box">{error}</div>}
           <button type="submit">Guardar</button>
         </form>

@@ -90,6 +90,9 @@ model Company {
   address     String?
   phone       String?
   contactName String?
+  email         String?  // correo de la empresa
+  contactEmail  String?  // correo de la persona de contacto
+  contactMobile String?  // celular de contacto
   active      Boolean  @default(true)
   createdAt   DateTime @default(now())
   affiliates  Affiliate[]

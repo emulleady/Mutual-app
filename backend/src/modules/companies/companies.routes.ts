@@ -3,6 +3,7 @@ import { z } from "zod";
 import * as XLSX from "xlsx";
 import PDFDocument from "pdfkit";
 import path from "path";
+import multer from "multer";
 import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
@@ -11,6 +12,7 @@ import { buildCompanyReport } from "./report";
 import { buildCompanyMonthlyLiquidacion } from "./liquidacionMensual";
 
 const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 router.use(requireAuth);
 
 // Cualquier usuario autenticado puede listar (se necesita para elegir la
@@ -40,12 +42,86 @@ router.get("/:id", async (req, res) => {
   res.json(company);
 });
 
+
+// Importacion masiva de empresas desde Excel. Se reconocen las columnas por
+// su titulo (Nombre/Empresa, CUIT, Domicilio, Telefono, Contacto). Si la
+// empresa ya existe (mismo nombre) se completan los datos que falten; nunca
+// se borra ni se desactiva nada.
+function normH(h: any): string {
+  return String(h ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+router.post("/import", requirePermission("companies.manage"), upload.single("file"), async (req: AuthenticatedRequest, res) => {
+  if (!req.file) return res.status(400).json({ error: "No se recibió ningún archivo" });
+  try {
+    const wb = XLSX.read(req.file.buffer, { type: "buffer" });
+    const rows: any[][] = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, blankrows: false });
+    const header = (rows[0] || []).map(normH);
+    const find = (...names: string[]) => header.findIndex((h) => names.includes(h));
+    const iName = find("NOMBRE", "EMPRESA", "RAZONSOCIAL", "NOMBREDELAEMPRESA");
+    if (iName < 0) {
+      return res.status(400).json({ error: "No se encontró la columna 'Nombre' (o 'Empresa'). Usá la plantilla." });
+    }
+    const iCuit = find("CUIT", "CUIL");
+    const iAddr = find("DOMICILIO", "DIRECCION");
+    const iPhone = find("TELEFONO", "TEL");
+    const iContact = find("CONTACTO", "PERSONADECONTACTO", "NOMBREDECONTACTO", "CONTACTONOMBRE");
+    const iMobile = find("CELULAR", "MOVIL", "CELULARDECONTACTO");
+    // "EMAIL" suele aparecer dos veces: la primera es de la empresa y la segunda del contacto.
+    const emailCols = header.map((h, i) => (["EMAIL", "CORREO", "MAIL"].includes(h) ? i : -1)).filter((i) => i >= 0);
+    const iEmail = emailCols[0] ?? -1;
+    const iContactEmail = emailCols[1] ?? -1;
+
+    const txt = (v: any) => { const t = v === undefined || v === null ? "" : String(v).trim(); return t || undefined; };
+    const result = { created: 0, updated: 0, errors: [] as { row: number; reason: string }[] };
+    const existing = await prisma.company.findMany();
+    const byName = new Map(existing.map((c) => [c.name.trim().toLowerCase(), c]));
+
+    for (let i = 1; i < rows.length; i++) {
+      const r = rows[i];
+      if (!r || r.every((c) => c === undefined || c === "")) continue;
+      const name = txt(r[iName]);
+      if (!name) { result.errors.push({ row: i + 1, reason: "Falta el nombre de la empresa" }); continue; }
+      const data = {
+        cuit: iCuit >= 0 ? txt(r[iCuit]) : undefined,
+        address: iAddr >= 0 ? txt(r[iAddr]) : undefined,
+        phone: iPhone >= 0 ? txt(r[iPhone]) : undefined,
+        contactName: iContact >= 0 ? txt(r[iContact]) : undefined,
+        contactMobile: iMobile >= 0 ? txt(r[iMobile]) : undefined,
+        email: iEmail >= 0 ? txt(r[iEmail]) : undefined,
+        contactEmail: iContactEmail >= 0 ? txt(r[iContactEmail]) : undefined,
+      };
+      try {
+        const found = byName.get(name.toLowerCase());
+        if (found) {
+          await prisma.company.update({ where: { id: found.id }, data });
+          result.updated++;
+        } else {
+          const created = await prisma.company.create({ data: { name, ...data } });
+          byName.set(name.toLowerCase(), created);
+          result.created++;
+        }
+      } catch (err: any) {
+        result.errors.push({ row: i + 1, reason: `No se pudo guardar: ${err.message || err}` });
+      }
+    }
+
+    await logAudit({ userId: req.user?.id, action: "create", entityType: "company", afterData: result, ipAddress: req.ip });
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ error: `No se pudo procesar el archivo: ${err.message || err}` });
+  }
+});
+
 const companySchema = z.object({
   name: z.string().min(1),
   cuit: z.string().optional().nullable(),
   address: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   contactName: z.string().optional().nullable(),
+  email: z.string().optional().nullable(),
+  contactEmail: z.string().optional().nullable(),
+  contactMobile: z.string().optional().nullable(),
 });
 
 router.post("/", requirePermission("companies.manage"), async (req: AuthenticatedRequest, res) => {

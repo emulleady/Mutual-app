@@ -151,6 +151,7 @@ export const api = {
   createInventoryPurchase: (itemId: number, data: unknown) =>
     request(`/inventory/items/${itemId}/purchases`, { method: "POST", body: JSON.stringify(data) }),
   getInventorySummary: (month: string) => request(`/inventory/summary?month=${month}`),
+  importCompanies: (file: File) => uploadFile("/companies/import", file),
   importAffiliates: (file: File) => uploadFile("/affiliates/import", file),
   downloadCompanyReportExcel: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/excel`, `estado-afiliados-${companyName}.xlsx`),
