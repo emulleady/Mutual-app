@@ -30,6 +30,7 @@ router.get("/:id", async (req, res) => {
     where: { id },
     include: {
       affiliates: {
+        where: { status: "active" }, // la empresa solo ve (y se le liquida) a los activos
         orderBy: { lastName: "asc" },
       },
     },

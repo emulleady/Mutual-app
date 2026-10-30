@@ -87,7 +87,7 @@ export default function Companies() {
           <dt>Contacto</dt><dd>{selected.contactName || "—"}</dd>
         </dl>
 
-        <h3>Asociados que trabajan en esta empresa ({selected.affiliates.length})</h3>
+        <h3>Asociados activos en esta empresa ({selected.affiliates.length})</h3>
         <table className="data-table">
           <thead><tr><th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Estado</th></tr></thead>
           <tbody>

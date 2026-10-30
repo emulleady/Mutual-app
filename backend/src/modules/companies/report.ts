@@ -34,6 +34,7 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
     where: { id: companyId },
     include: {
       affiliates: {
+        where: { status: "active" }, // solo se liquida a los activos
         orderBy: { lastName: "asc" },
         include: { dependents: { orderBy: { id: "asc" } } },
       },
@@ -62,7 +63,7 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
     }
 
     rows.push({
-      affiliateNumber: `${affiliate.affiliateNumber}/00`,
+      affiliateNumber: `${affiliate.affiliateNumber.split("/")[0]}/00`,
       fullName: `${affiliate.lastName}, ${affiliate.firstName}`,
       dni: affiliate.dni,
       parentesco: "Titular",
@@ -74,7 +75,7 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
 
     affiliate.dependents.forEach((dep, idx) => {
       rows.push({
-        affiliateNumber: `${affiliate.affiliateNumber}/${String(idx + 1).padStart(2, "0")}`,
+        affiliateNumber: dep.dependentNumber || `${affiliate.affiliateNumber.split("/")[0]}/${String(idx + 1).padStart(2, "0")}`,
         fullName: dep.fullName,
         dni: dep.dni || "",
         parentesco: dep.parentesco,
