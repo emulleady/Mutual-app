@@ -63,6 +63,7 @@ export const permissionLabels: Record<string, string> = {
   "orders.setDate": "Cambiar la fecha y el número de una orden de compra",
   "agreements.manage": "Gestionar convenios (empresas y comercios)",
   "inventory.manage": "Gestionar inventario y préstamos de artículos",
+  "finance.manage": "Gestionar cobranzas de empresas y caja (ingresos y egresos)",
 };
 
 export function translate(map: Record<string, string>, value: string): string {

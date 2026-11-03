@@ -260,10 +260,19 @@ router.post("/:id/deactivate", requirePermission("affiliates.deactivate"), async
     },
   });
 
+  // Al dar de baja al titular se dan de baja sus familiares (adherentes,
+  // participantes, etc.). Se recuerda cuales fueron por esto, para
+  // reactivarlos junto con el titular.
+  const cascaded = await prisma.dependent.updateMany({
+    where: { affiliateId: id, active: true },
+    data: { active: false, deactivatedWithTitular: true },
+  });
+
   await logAffiliateEvent({
     affiliateId: id,
     eventType: "affiliate_deactivated",
-    description: `Afiliado dado de baja el ${fmtDate(date)}${note ? ` (${note})` : ""}`,
+    description: `Afiliado dado de baja el ${fmtDate(date)}${note ? ` (${note})` : ""}` +
+      (cascaded.count > 0 ? ` — se dieron de baja ${cascaded.count} familiar(es)` : ""),
     createdByUserId: req.user?.id,
   });
 
@@ -320,6 +329,13 @@ router.post("/:id/activate", requirePermission("affiliates.deactivate"), async (
     include: { company: true },
   });
 
+  // Reactiva los familiares que se habian dado de baja junto con el titular
+  // (los que se desactivaron aparte a mano quedan como estan).
+  const restored = await prisma.dependent.updateMany({
+    where: { affiliateId: id, deactivatedWithTitular: true },
+    data: { active: true, deactivatedWithTitular: false },
+  });
+
   const changed = companyId !== before.companyId;
   await logAffiliateEvent({
     affiliateId: id,
@@ -329,7 +345,8 @@ router.post("/:id/activate", requirePermission("affiliates.deactivate"), async (
       (changed
         ? ` — cambió de empresa: ${before.company?.name ?? "sin empresa"} → ${updated.company?.name ?? "sin empresa"}`
         : updated.company ? ` en ${updated.company.name}` : "") +
-      (note ? ` (${note})` : ""),
+      (note ? ` (${note})` : "") +
+      (restored.count > 0 ? ` — se reactivaron ${restored.count} familiar(es)` : ""),
     createdByUserId: req.user?.id,
   });
 
@@ -383,6 +400,8 @@ const dependentSchema = z.object({
   cuil: z.string().optional().nullable(),
   dependentNumber: z.string().optional().nullable(),
   parentesco: z.string().min(1),
+  socioType: z.string().optional().nullable(),
+  feeAmount: z.number().nonnegative().optional().nullable(),
   birthDate: z.string().datetime().optional().nullable(),
   healthProvider: z.string().optional().nullable(),
   coveragePercentage: z.string().optional().nullable(),
@@ -394,6 +413,52 @@ const dependentSchema = z.object({
   province: z.string().optional().nullable(),
   phone: z.string().optional().nullable(),
   email: z.string().email().optional().nullable().or(z.literal("")),
+});
+
+// Editar un familiar ya cargado (todos sus datos) o darlo de baja / de alta
+// por separado con "active". Los campos que no se envian no se tocan.
+router.put("/:id/dependents/:depId", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+  const affiliateId = Number(req.params.id);
+  const depId = Number(req.params.depId);
+  const parsed = dependentSchema.partial().extend({ active: z.boolean().optional() }).safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+
+  const before = await prisma.dependent.findFirst({ where: { id: depId, affiliateId } });
+  if (!before) return res.status(404).json({ error: "Familiar no encontrado" });
+
+  const d = parsed.data;
+  const data: any = {};
+  const copy = ["fullName","dni","cuil","dependentNumber","parentesco","socioType","feeAmount","healthProvider","coveragePercentage",
+    "address","addressNumber","addressType","floorApt","locality","province","phone"] as const;
+  for (const k of copy) if ((d as any)[k] !== undefined) data[k] = (d as any)[k] === "" ? null : (d as any)[k];
+  if (d.email !== undefined) data.email = d.email || null;
+  if (d.birthDate !== undefined) data.birthDate = d.birthDate ? new Date(d.birthDate) : null;
+  if (d.active !== undefined) {
+    data.active = d.active;
+    data.deactivatedWithTitular = false; // decision manual: ya no depende del titular
+  }
+
+  const updated = await prisma.dependent.update({ where: { id: depId }, data });
+
+  const what = d.active === undefined ? "se modificaron los datos de" : d.active ? "se reactivó a" : "se dio de baja a";
+  await logAffiliateEvent({
+    affiliateId,
+    eventType: "dependent_modified",
+    description: `Familiar: ${what} ${updated.fullName} (${updated.parentesco})`,
+    referenceTable: "dependents",
+    referenceId: depId,
+    createdByUserId: req.user?.id,
+  });
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "dependent",
+    entityId: depId,
+    beforeData: before,
+    afterData: updated,
+    ipAddress: req.ip,
+  });
+  res.json(updated);
 });
 
 // Alta manual de un familiar a cargo (ademas de los que vienen por la
@@ -415,6 +480,8 @@ router.post("/:id/dependents", requirePermission("affiliates.edit"), async (req:
       cuil: data.cuil ?? null,
       dependentNumber: data.dependentNumber ?? null,
       parentesco: data.parentesco,
+      socioType: data.socioType || null,
+      feeAmount: data.feeAmount ?? null,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
       healthProvider: data.healthProvider ?? null,
       coveragePercentage: data.coveragePercentage ?? null,
@@ -467,7 +534,7 @@ router.get("/:id/forms/familiares", async (req, res) => {
   if (!affiliate) return res.status(404).json({ error: "Afiliado no encontrado" });
 
   const dependents = await prisma.dependent.findMany({
-    where: { affiliateId: id },
+    where: { affiliateId: id, active: true },
     orderBy: { fullName: "asc" },
   });
   generateFichaFamiliaresPdf(res, affiliate, dependents);

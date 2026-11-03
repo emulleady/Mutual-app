@@ -23,7 +23,7 @@ const MUTED = "FFB9D2E8";
 
 const MONEY_FORMAT = '"$" #,##0.00';
 const DATE_FORMAT = "dd/mm/yyyy";
-const LAST_COL = 9; // columnas A..I
+const LAST_COL = 10; // columnas A..J
 
 export function parseMonth(month: string): { start: Date; end: Date; year: number; monthIndex: number } | null {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
@@ -49,10 +49,12 @@ const thin = (argb: string): Partial<ExcelJS.Border> => ({ style: "thin", color:
 // compra que vencen en el mes elegido y todavía están impagas, de los
 // asociados activos de esa empresa. Sin mora (la empresa descuenta la cuota
 // tal cual del recibo de haberes).
-export async function buildCompanyMonthlyLiquidacion(
-  companyId: number,
-  month: string
-): Promise<{ buffer: Buffer; companyName: string; empty: boolean } | null> {
+export type LiquidacionLine = { detalle: string; fecha: Date | null; orden: string; cuota: string; vence: Date | null; monto: number; installmentId?: number };
+export type LiquidacionPerson = { number: string; name: string; dni: string; subtotal: number; lines: LiquidacionLine[] };
+
+// Calcula (sin armar el Excel) lo que hay que descontar a una empresa en un
+// mes: cuota social + cuotas de ordenes de compra. Lo usa el Excel y las cobranzas.
+export async function computeLiquidacionData(companyId: number, month: string) {
   const range = parseMonth(month);
   if (!range) return null;
 
@@ -63,6 +65,7 @@ export async function buildCompanyMonthlyLiquidacion(
     where: { companyId, status: "active" },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: {
+      dependents: { where: { active: true }, orderBy: { id: "asc" } },
       loans: {
         where: { status: { in: ["active", "overdue", "pending", "approved"] } },
         orderBy: { grantedAt: "asc" },
@@ -77,17 +80,53 @@ export async function buildCompanyMonthlyLiquidacion(
   });
 
   // --- Datos: una "persona" con sus cuotas del mes ---
-  type Line = { fecha: Date; orden: string; cuota: string; vence: Date; monto: number };
-  const people: { number: string; name: string; dni: string; subtotal: number; lines: Line[] }[] = [];
+  // Cada asociado activo lleva: su cuota social, la de cada familiar con tipo
+  // de socio (adherente, participante...) y las cuotas de ordenes de compra
+  // que vencen en el mes. La cuota social se suma aunque no tenga ordenes.
+  type Line = LiquidacionLine;
+  const people: LiquidacionPerson[] = [];
+
+  const feeSettings = await prisma.membershipFeeSetting.findMany();
+  const feeByType = new Map(feeSettings.map((f: { socioType: string; feeAmount: number }) => [f.socioType.trim().toLowerCase(), f.feeAmount]));
+  const feeFor = (own: number | null | undefined, socioType: string | null | undefined): number => {
+    if (own != null) return own;
+    if (!socioType) return 0;
+    return feeByType.get(socioType.trim().toLowerCase()) ?? 0;
+  };
+  let withoutFee = 0; // personas con tipo de socio pero sin valor de cuota configurado
+  let feeTotal = 0;
 
   for (const a of affiliates) {
     const lines: Line[] = [];
+
+    // Cuota social del titular y de sus familiares.
+    const titularFee = feeFor(a.feeAmount, a.socioType);
+    if (titularFee > 0) {
+      lines.push({ detalle: `Cuota social - Titular${a.socioType ? ` (${a.socioType})` : ""}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(titularFee.toFixed(2)) });
+      feeTotal += titularFee;
+    } else if (a.socioType && a.socioType.toLowerCase() !== "no socio") {
+      withoutFee++;
+    }
+    for (const d of a.dependents) {
+      if (d.registryStatus && d.registryStatus.toUpperCase().includes("BAJA")) continue;
+      if (!d.socioType || d.socioType.toLowerCase() === "no socio") continue;
+      const fee = feeFor(d.feeAmount, d.socioType);
+      if (fee > 0) {
+        lines.push({ detalle: `Cuota social - ${d.socioType}: ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(fee.toFixed(2)) });
+        feeTotal += fee;
+      } else {
+        withoutFee++;
+      }
+    }
+
     for (const loan of a.loans) {
       for (const inst of loan.installments) {
         lines.push({
+          detalle: "Orden de compra",
           fecha: loan.grantedAt,
           orden: loan.orderNumber || String(loan.id),
           cuota: `${inst.number}/${loan.installmentsCount}`,
+          installmentId: inst.id,
           vence: inst.dueDate,
           // Si la cuota ya tuvo un pago parcial, se pide solo lo que falta.
           monto: Number((inst.amount - inst.paidAmount).toFixed(2)),
@@ -105,7 +144,17 @@ export async function buildCompanyMonthlyLiquidacion(
   }
 
   const grandTotal = Number(people.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2));
-  const installmentsCount = people.reduce((sum, p) => sum + p.lines.length, 0);
+  const installmentsCount = people.reduce((sum, p) => sum + p.lines.filter((l) => l.orden !== "").length, 0);
+  return { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee };
+}
+
+export async function buildCompanyMonthlyLiquidacion(
+  companyId: number,
+  month: string
+): Promise<{ buffer: Buffer; companyName: string; empty: boolean } | null> {
+  const data = await computeLiquidacionData(companyId, month);
+  if (!data) return null;
+  const { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee } = data;
   const periodLabel = `${MONTH_NAMES[range.monthIndex]} ${range.year}`;
 
   // --- Planilla ---
@@ -126,7 +175,7 @@ export async function buildCompanyMonthlyLiquidacion(
   });
 
   ws.columns = [
-    { width: 14 }, { width: 34 }, { width: 13 }, { width: 13 }, { width: 16 },
+    { width: 14 }, { width: 34 }, { width: 13 }, { width: 42 }, { width: 13 }, { width: 14 },
     { width: 9 }, { width: 14 }, { width: 16 }, { width: 22 },
   ];
 
@@ -147,7 +196,7 @@ export async function buildCompanyMonthlyLiquidacion(
   t1.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 
   const t2 = ws.getCell(2, 2);
-  t2.value = "LIQUIDACIÓN MENSUAL DE CUOTAS · ÓRDENES DE COMPRA";
+  t2.value = "LIQUIDACIÓN MENSUAL · CUOTA SOCIAL Y ÓRDENES DE COMPRA";
   t2.font = { name: "Calibri", size: 12, bold: true, color: { argb: "FFFFB878" } };
   t2.alignment = { vertical: "middle", horizontal: "left", indent: 1 };
 
@@ -173,7 +222,7 @@ export async function buildCompanyMonthlyLiquidacion(
   const info: [number, number, string, string][] = [
     [1, 2, "EMPRESA", company.name.toUpperCase()],
     [4, 5, "PERÍODO", periodLabel],
-    [7, 8, "EMITIDO", new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })],
+    [8, 9, "EMITIDO", new Date().toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })],
   ];
   for (const [labelCol, valueCol, label, value] of info) {
     const l = ws.getCell(7, labelCol);
@@ -188,7 +237,7 @@ export async function buildCompanyMonthlyLiquidacion(
 
   // Encabezado de la tabla (fila 8).
   const headers = [
-    "N.º ASOCIADO", "APELLIDO Y NOMBRE", "D.N.I.", "FECHA ORDEN", "N.º DE ORDEN",
+    "N.º ASOCIADO", "APELLIDO Y NOMBRE", "D.N.I.", "DETALLE", "FECHA ORDEN", "N.º DE ORDEN",
     "CUOTA", "VENCIMIENTO", "MONTO CUOTA", "TOTAL A DESCONTAR",
   ];
   const headerRow = ws.getRow(8);
@@ -213,6 +262,7 @@ export async function buildCompanyMonthlyLiquidacion(
         idx === 0 ? p.number : null,
         idx === 0 ? p.name : null,
         idx === 0 ? p.dni : null,
+        l.detalle,
         l.fecha,
         l.orden,
         l.cuota,
@@ -229,13 +279,13 @@ export async function buildCompanyMonthlyLiquidacion(
           top: idx === 0 ? thin("FF9DB4CC") : undefined,
           bottom: thin("FFD5E1EC"),
         };
-        if (i === 3 || i === 6) {
+        if (i === 4 || i === 7) {
           cell.numFmt = DATE_FORMAT;
           cell.alignment = { horizontal: "center", vertical: "middle" };
-        } else if (i === 7 || i === 8) {
+        } else if (i === 8 || i === 9) {
           cell.numFmt = MONEY_FORMAT;
           cell.alignment = { horizontal: "right", vertical: "middle" };
-        } else if (i === 1) {
+        } else if (i === 1 || i === 3) {
           cell.alignment = { horizontal: "left", vertical: "middle", indent: 1 };
         } else {
           cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -248,7 +298,7 @@ export async function buildCompanyMonthlyLiquidacion(
   if (people.length === 0) {
     ws.mergeCells(row, 1, row, LAST_COL);
     const c = ws.getCell(row, 1);
-    c.value = `No hay cuotas de órdenes de compra que venzan en ${periodLabel} para esta empresa.`;
+    c.value = `No hay cuotas sociales ni cuotas de órdenes de compra para descontar en ${periodLabel} en esta empresa.`;
     c.font = { name: "Calibri", size: 11, italic: true, color: { argb: "FF5B7A99" } };
     c.alignment = { horizontal: "center", vertical: "middle" };
     ws.getRow(row).height = 34;
@@ -258,7 +308,7 @@ export async function buildCompanyMonthlyLiquidacion(
   // Fila de total (naranja, destacada).
   row++;
   ws.getRow(row).height = 28;
-  ws.mergeCells(row, 1, row, 8);
+  ws.mergeCells(row, 1, row, LAST_COL - 1);
   const totalLabel = ws.getCell(row, 1);
   totalLabel.value = "TOTAL A DESCONTAR";
   totalLabel.font = { name: "Calibri", size: 13, bold: true, color: { argb: WHITE } };
@@ -274,7 +324,9 @@ export async function buildCompanyMonthlyLiquidacion(
   row++;
   ws.mergeCells(row, 1, row, LAST_COL);
   const summary = ws.getCell(row, 1);
-  summary.value = `${people.length} asociado(s) · ${installmentsCount} cuota(s) · período ${periodLabel}`;
+  summary.value =
+    `${people.length} asociado(s) · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} · ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
+    (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin valor de cuota configurado` : "");
   summary.font = { name: "Calibri", size: 9, italic: true, color: { argb: "FF5B7A99" } };
   summary.alignment = { horizontal: "right", vertical: "middle" };
 

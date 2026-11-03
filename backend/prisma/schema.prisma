@@ -97,6 +97,7 @@ model Company {
   createdAt   DateTime @default(now())
   affiliates  Affiliate[]
   periods     AffiliateMembershipPeriod[]
+  payments    CompanyPayment[]
 
   @@map("companies")
 }
@@ -158,6 +159,10 @@ model Dependent {
   dni            String?
   cuil           String?
   parentesco     String
+  active         Boolean  @default(true)
+  deactivatedWithTitular Boolean @default(false) // se desactivo junto con el titular (se reactiva con el)
+  socioType      String?  // Adherente | Participante | Socio Deportivo | ... (define la cuota social)
+  feeAmount      Float?   // si se carga, pisa el valor de cuota del tipo de socio
   birthDate      DateTime?
   healthProvider     String?
   coveragePercentage String?
@@ -403,4 +408,110 @@ model AffiliateMembershipPeriod {
   company     Company?  @relation(fields: [companyId], references: [id])
 
   @@map("affiliate_membership_periods")
+}
+
+// ---------------------------------------------------------------------
+// Cobranzas por empresa y caja de ingresos / egresos
+// ---------------------------------------------------------------------
+
+// Cuentas donde se mueve el dinero (Efectivo, Banco, etc.).
+model CashAccount {
+  id             Int      @id @default(autoincrement())
+  name           String   @unique
+  openingBalance Float    @default(0) // saldo inicial al empezar a usar el sistema
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  movements      CashMovement[]
+  collections    CompanyPayment[]
+
+  @@map("cash_accounts")
+}
+
+model CashCategory {
+  id        Int      @id @default(autoincrement())
+  name      String
+  kind      String   // income | expense
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  movements CashMovement[]
+
+  @@unique([name, kind])
+  @@map("cash_categories")
+}
+
+// Cada ingreso o egreso. Nunca se borra: un movimiento equivocado se anula
+// (voided) y queda el registro con el motivo.
+model CashMovement {
+  id               Int       @id @default(autoincrement())
+  date             DateTime
+  type             String    // income | expense
+  amount           Float
+  concept          String
+  notes            String?
+  accountId        Int
+  categoryId       Int?
+  source           String    @default("manual") // manual | company_payment
+  companyPaymentId Int?      @unique
+  voided           Boolean   @default(false)
+  voidedReason     String?
+  voidedAt         DateTime?
+  createdByUserId  Int?
+  createdAt        DateTime  @default(now())
+  account          CashAccount  @relation(fields: [accountId], references: [id])
+  category         CashCategory? @relation(fields: [categoryId], references: [id])
+  companyPayment   CompanyPayment? @relation(fields: [companyPaymentId], references: [id])
+  attachments      CashAttachment[]
+
+  @@map("cash_movements")
+}
+
+// Comprobantes (foto o PDF). Se guardan en la base de datos porque el disco
+// del servicio en Render no es permanente.
+model CashAttachment {
+  id         Int      @id @default(autoincrement())
+  movementId Int
+  fileName   String
+  mimeType   String
+  size       Int
+  data       Bytes
+  createdAt  DateTime @default(now())
+  movement   CashMovement @relation(fields: [movementId], references: [id])
+
+  @@map("cash_attachments")
+}
+
+// Lo que pago una empresa por un mes (monto total). Guarda lo liquidado en ese
+// momento para ver la diferencia, y que cuotas se marcaron pagas.
+model CompanyPayment {
+  id               Int       @id @default(autoincrement())
+  companyId        Int
+  month            String    // AAAA-MM
+  receivedAt       DateTime
+  amount           Float
+  expectedAmount   Float
+  accountId        Int
+  markedPaid       Boolean   @default(false)
+  notes            String?
+  voided           Boolean   @default(false)
+  voidedReason     String?
+  voidedAt         DateTime?
+  createdByUserId  Int?
+  createdAt        DateTime  @default(now())
+  company          Company   @relation(fields: [companyId], references: [id])
+  account          CashAccount @relation(fields: [accountId], references: [id])
+  installments     CompanyPaymentInstallment[]
+  movement         CashMovement?
+
+  @@map("company_payments")
+}
+
+model CompanyPaymentInstallment {
+  id                Int @id @default(autoincrement())
+  companyPaymentId  Int
+  loanInstallmentId Int
+  loanPaymentId     Int
+  amount            Float
+  companyPayment    CompanyPayment @relation(fields: [companyPaymentId], references: [id])
+
+  @@map("company_payment_installments")
 }

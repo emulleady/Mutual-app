@@ -31,6 +31,7 @@ const COLUMNS = [
   "phone",                // W - Telefono
   "email",                // X - Email
   "membershipDate",       // Y - Fecha de alta real (opcional)
+  "socioType",            // Z - Tipo de socio (opcional)
 ] as const;
 
 type RawRow = Record<(typeof COLUMNS)[number], any>;
@@ -117,6 +118,7 @@ export function buildMapper(header: any[]): ((cells: any[]) => Mapped) | null {
     else if (n === "FECHABAJA" || n === "BAJA") bajaIdx.push(idx);
     else if (n.startsWith("FECHAALTANUEV") || n === "FECHAALTA" || n === "ALTANUEVA" || n === "ALTANUEVO") altaIdx.push(idx);
     else if (n === "FECHAALTAREAL" || n === "FECHADEALTAREAL" || n === "FECHAASOCIACION") set("membershipDate");
+    else if (n === "TIPODESOCIO" || n === "TIPOSOCIO") set("socioType");
     else if (n === "ACTIVOS") set("activeNote");
     else if (n === "PARENTESCO") set("parentesco");
     else if (n === "FECHANAC" || n === "FECHANACIMIENTO") set("birthDate");
@@ -286,6 +288,7 @@ export async function importAffiliatesFromExcel(
         coveragePercentage: toText(raw.coveragePercentage),
         healthProviderEntryDate: toDate(raw.healthProviderEntryDate),
         registryStatus,
+        ...(toText(raw.socioType) ? { socioType: toText(raw.socioType) } : {}),
       };
       // Fecha real de alta: solo se pisa si la planilla la trae.
       const membershipDate = toDate(raw.membershipDate);
@@ -358,6 +361,8 @@ export async function importAffiliatesFromExcel(
         dni,
         cuil: toText(raw.cuil),
         dependentNumber: affiliateNumber,
+        active: !isBaja,
+        ...(toText(raw.socioType) ? { socioType: toText(raw.socioType) } : {}),
         parentesco: parentescoIsText ? parentesco! : `Familiar ${suffix ?? ""}`.trim(),
         birthDate: toDate(raw.birthDate),
         healthProvider: toText(raw.healthProvider),

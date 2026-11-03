@@ -21,13 +21,17 @@ export default function AffiliatesList() {
   const [importResult, setImportResult] = useState<any | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"normal" | "altas">("normal");
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
   const navigate = useNavigate();
 
   function load() {
-    api.listAffiliates(viewMode === "altas" ? { sort: "altas" } : undefined).then(setAffiliates).catch(() => {});
+    api
+      .listAffiliates({ sort: viewMode === "altas" ? "altas" : undefined, status: statusFilter || undefined })
+      .then(setAffiliates)
+      .catch(() => {});
   }
 
-  useEffect(load, [viewMode]);
+  useEffect(load, [viewMode, statusFilter]);
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}); }, []);
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -67,6 +71,11 @@ export default function AffiliatesList() {
       <div className="page-header">
         <h1>{viewMode === "altas" ? "Todas las altas" : "Asociados"}</h1>
         <div style={{ display: "flex", gap: 8 }}>
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} aria-label="Filtrar por estado">
+            <option value="">Todos</option>
+            <option value="active">Activos</option>
+            <option value="inactive">Inactivos</option>
+          </select>
           <button
             className="small-button"
             onClick={() => setViewMode((v) => (v === "altas" ? "normal" : "altas"))}
@@ -128,6 +137,8 @@ export default function AffiliatesList() {
           <button type="submit">Guardar</button>
         </form>
       )}
+
+      <p className="note">{affiliates.length} asociado(s){statusFilter === "active" ? " activo(s)" : statusFilter === "inactive" ? " inactivo(s)" : ""}</p>
 
       <table className="data-table">
         <thead>

@@ -11,6 +11,7 @@ import companiesRoutes from "./modules/companies/companies.routes";
 import auditRoutes from "./modules/audit/audit.routes";
 import agreementsRoutes from "./modules/agreements/agreements.routes";
 import inventoryRoutes from "./modules/inventory/inventory.routes";
+import financeRoutes from "./modules/finance/finance.routes";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.use("/api/companies", companiesRoutes);
 app.use("/api/audit", auditRoutes);
 app.use("/api/agreements", agreementsRoutes);
 app.use("/api/inventory", inventoryRoutes);
+app.use("/api/finance", financeRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 

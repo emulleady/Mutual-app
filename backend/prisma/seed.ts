@@ -38,6 +38,7 @@ async function main() {
     "orders.setDate",
     "agreements.manage",
     "inventory.manage",
+    "finance.manage",
   ];
 
   for (const key of permissionKeys) {

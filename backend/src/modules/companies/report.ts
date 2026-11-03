@@ -36,7 +36,7 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
       affiliates: {
         where: { status: "active" }, // solo se liquida a los activos
         orderBy: { lastName: "asc" },
-        include: { dependents: { orderBy: { id: "asc" } } },
+        include: { dependents: { where: { active: true }, orderBy: { id: "asc" } } },
       },
     },
   });

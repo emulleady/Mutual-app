@@ -44,6 +44,29 @@ async function nextOrderNumber(): Promise<string> {
   return `A-${String(counter).padStart(9, "0")}`;
 }
 
+// Buscar ordenes de compra por numero (ej. "1166" encuentra "A-000001166").
+router.get("/search", async (req, res) => {
+  const q = String(req.query.q || "").trim();
+  if (q.length === 0) return res.json([]);
+  const loans = await prisma.loan.findMany({
+    where: { orderNumber: { contains: q, mode: "insensitive" } },
+    include: { affiliate: { select: { id: true, firstName: true, lastName: true, affiliateNumber: true, dni: true } } },
+    orderBy: { grantedAt: "desc" },
+    take: 20,
+  });
+  res.json(
+    loans.map((l) => ({
+      id: l.id,
+      orderNumber: l.orderNumber,
+      loanType: l.loanType,
+      amount: l.amount,
+      grantedAt: l.grantedAt,
+      status: l.status,
+      affiliate: l.affiliate,
+    }))
+  );
+});
+
 // Prestamos activos e historicos de un afiliado (misma tabla, distinto status).
 router.get("/affiliate/:affiliateId", async (req, res) => {
   const affiliateId = Number(req.params.affiliateId);

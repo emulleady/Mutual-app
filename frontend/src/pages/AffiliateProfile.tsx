@@ -6,19 +6,28 @@ import { affiliateStatusLabels, translate } from "../utils/labels";
 
 type Tab = "resumen" | "datos" | "prestamos" | "familiares" | "historial";
 
+const EMPTY_DEP_FORM = {
+  fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", birthDate: "",
+  address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
+};
+
 export default function AffiliateProfile() {
   const { id } = useParams();
   const [affiliate, setAffiliate] = useState<any | null>(null);
-  const [tab, setTab] = useState<Tab>("resumen");
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return t === "prestamos" || t === "familiares" || t === "historial" || t === "datos" ? (t as Tab) : "resumen";
+  });
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState<any>({});
   const [error, setError] = useState<string | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [dependentForm, setDependentForm] = useState({
-    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "",
+    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", birthDate: "",
     address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
   });
+  const [editingDepId, setEditingDepId] = useState<number | null>(null);
   const [dependentError, setDependentError] = useState<string | null>(null);
   const [membershipFees, setMembershipFees] = useState<any[]>([]);
 
@@ -140,12 +149,17 @@ export default function AffiliateProfile() {
       return;
     }
     try {
-      await api.createDependent(affiliate.id, {
+      const call = (payload: Record<string, unknown>) =>
+        editingDepId
+          ? api.updateDependent(affiliate.id, editingDepId, payload)
+          : api.createDependent(affiliate.id, payload);
+      await call({
         fullName: dependentForm.fullName,
         dni: dependentForm.dni || null,
         cuil: dependentForm.cuil || null,
         dependentNumber: dependentForm.dependentNumber || null,
         parentesco,
+        socioType: dependentForm.socioType || null,
         birthDate: dependentForm.birthDate ? new Date(dependentForm.birthDate).toISOString() : null,
         address: dependentForm.address || null,
         addressNumber: dependentForm.addressNumber || null,
@@ -157,13 +171,49 @@ export default function AffiliateProfile() {
         email: dependentForm.email || null,
       });
       setShowDependentForm(false);
-      setDependentForm({
-        fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", birthDate: "",
-        address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
-      });
+      setEditingDepId(null);
+      setDependentForm(EMPTY_DEP_FORM);
       load();
     } catch (err: any) {
       setDependentError(err.message || "No se pudo agregar el familiar");
+    }
+  }
+
+  function startEditDependent(d: any) {
+    const known = ["Cónyuge", "Esposo/a", "Hijo/a", "Concubino/a", "Hijastro/a"];
+    const isKnown = known.includes(d.parentesco);
+    setDependentError(null);
+    setEditingDepId(d.id);
+    setDependentForm({
+      fullName: d.fullName || "",
+      dni: d.dni || "",
+      cuil: d.cuil || "",
+      dependentNumber: d.dependentNumber || "",
+      parentesco: isKnown ? d.parentesco : "Otro",
+      parentescoOtro: isKnown ? "" : d.parentesco || "",
+      socioType: d.socioType || "",
+      birthDate: d.birthDate ? String(d.birthDate).slice(0, 10) : "",
+      address: d.address || "",
+      addressNumber: d.addressNumber || "",
+      addressType: d.addressType || "",
+      floorApt: d.floorApt || "",
+      locality: d.locality || "",
+      province: d.province || "",
+      phone: d.phone || "",
+      email: d.email || "",
+    });
+    setShowDependentForm(true);
+  }
+
+  async function toggleDependentActive(d: any) {
+    const next = !(d.active !== false);
+    const msg = next ? `¿Reactivar a ${d.fullName}?` : `¿Dar de baja a ${d.fullName}? Deja de sumar cuota social.`;
+    if (!window.confirm(msg)) return;
+    try {
+      await api.updateDependent(affiliate.id, d.id, { active: next });
+      load();
+    } catch (err: any) {
+      setDependentError(err.message || "No se pudo actualizar el familiar");
     }
   }
 
@@ -362,7 +412,10 @@ export default function AffiliateProfile() {
               <button className="small-button" onClick={() => api.downloadFichaFamiliares(affiliate.id, `${affiliate.lastName}-${affiliate.firstName}`)}>
                 Ficha de Familiares + Actualización de datos (PDF)
               </button>
-              <button onClick={() => setShowDependentForm((v) => !v)}>
+              <button onClick={() => {
+                if (showDependentForm) { setEditingDepId(null); setDependentForm(EMPTY_DEP_FORM); }
+                setShowDependentForm((v) => !v);
+              }}>
                 {showDependentForm ? "Cancelar" : "Agregar familiar"}
               </button>
             </div>
@@ -381,12 +434,22 @@ export default function AffiliateProfile() {
                 <option value="Cónyuge">Cónyuge</option>
                 <option value="Esposo/a">Esposo/a</option>
                 <option value="Hijo/a">Hijo/a</option>
+                <option value="Concubino/a">Concubino/a</option>
+                <option value="Hijastro/a">Hijastro/a</option>
                 <option value="Otro">Otro</option>
               </select>
               {dependentForm.parentesco === "Otro" && (
                 <input placeholder="Especificar parentesco" value={dependentForm.parentescoOtro}
                   onChange={(e) => setDependentForm({ ...dependentForm, parentescoOtro: e.target.value })} required />
               )}
+              <select value={dependentForm.socioType}
+                onChange={(e) => setDependentForm({ ...dependentForm, socioType: e.target.value })}>
+                <option value="">Tipo de socio (define la cuota social)</option>
+                <option value="Adherente">Adherente</option>
+                <option value="Participante">Participante</option>
+                <option value="Socio Deportivo">Socio Deportivo</option>
+                <option value="No socio">No socio</option>
+              </select>
               <input type="date" value={dependentForm.birthDate}
                 onChange={(e) => setDependentForm({ ...dependentForm, birthDate: e.target.value })} />
               <input placeholder="CUIL" value={dependentForm.cuil}
@@ -412,25 +475,48 @@ export default function AffiliateProfile() {
               <input placeholder="Email" value={dependentForm.email}
                 onChange={(e) => setDependentForm({ ...dependentForm, email: e.target.value })} />
               {dependentError && <div className="error-box">{dependentError}</div>}
-              <button type="submit">Guardar</button>
+              <button type="submit">{editingDepId ? "Guardar cambios del familiar" : "Guardar"}</button>
             </form>
           )}
 
           <table className="data-table">
-            <thead><tr><th>N° asociado</th><th>Nombre</th><th>Parentesco</th><th>DNI</th><th>Obra social</th><th>Cobertura</th></tr></thead>
+            <thead><tr><th>N° asociado</th><th>Nombre</th><th>Parentesco</th><th>Tipo de socio</th><th>DNI</th><th>Obra social</th><th>Cobertura</th><th>Estado</th><th></th></tr></thead>
             <tbody>
               {(affiliate.dependents || []).map((d: any) => (
-                <tr key={d.id}>
+                <tr key={d.id} style={d.active === false ? { opacity: 0.55 } : undefined}>
                   <td>{d.dependentNumber || "—"}</td>
                   <td>{d.fullName}</td>
                   <td>{d.parentesco}</td>
+                  <td>
+                    <select value={d.socioType || ""} onChange={async (e) => {
+                      try {
+                        await api.updateDependent(affiliate.id, d.id, { socioType: e.target.value || null });
+                        load();
+                      } catch (err: any) {
+                        setDependentError(err.message || "No se pudo actualizar el tipo de socio");
+                      }
+                    }}>
+                      <option value="">Sin especificar</option>
+                      <option value="Adherente">Adherente</option>
+                      <option value="Participante">Participante</option>
+                      <option value="Socio Deportivo">Socio Deportivo</option>
+                      <option value="No socio">No socio</option>
+                    </select>
+                  </td>
                   <td>{d.dni || "—"}</td>
                   <td>{d.healthProvider || "—"}</td>
                   <td>{d.coveragePercentage || "—"}</td>
+                  <td>{d.active === false ? "De baja" : "Activo"}</td>
+                  <td style={{ whiteSpace: "nowrap" }}>
+                    <button className="small-button" onClick={() => startEditDependent(d)}>Editar</button>{" "}
+                    <button className="small-button" onClick={() => toggleDependentActive(d)}>
+                      {d.active === false ? "Reactivar" : "Dar de baja"}
+                    </button>
+                  </td>
                 </tr>
               ))}
               {(!affiliate.dependents || affiliate.dependents.length === 0) && (
-                <tr><td colSpan={6}>Sin familiares a cargo cargados.</td></tr>
+                <tr><td colSpan={9}>Sin familiares a cargo cargados.</td></tr>
               )}
             </tbody>
           </table>

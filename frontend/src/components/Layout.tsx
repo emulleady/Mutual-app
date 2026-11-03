@@ -12,6 +12,7 @@ export default function Layout({
   canAudit,
   canAgreements,
   canInventory,
+  canFinance,
 }: {
   children: React.ReactNode;
   onLogout: () => void;
@@ -22,17 +23,55 @@ export default function Layout({
   canAudit?: boolean;
   canAgreements?: boolean;
   canInventory?: boolean;
+  canFinance?: boolean;
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
+  const [orderResults, setOrderResults] = useState<any[]>([]);
+  const [searched, setSearched] = useState(false);
 
   async function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     if (!query.trim()) return;
-    const found = await api.searchAffiliates(query);
+    const [found, orders] = await Promise.all([
+      api.searchAffiliates(query).catch(() => []),
+      api.searchLoans(query).catch(() => []),
+    ]);
     setResults(found);
+    setOrderResults(orders);
+    setSearched(true);
   }
+
+  function closeSearch() {
+    setResults([]);
+    setOrderResults([]);
+    setSearched(false);
+    setQuery("");
+  }
+
+  const hasResults = results.length > 0 || orderResults.length > 0;
+  const orderList = orderResults.length > 0 && (
+    <>
+      <div className="search-result-meta" style={{ padding: "6px 12px", fontWeight: 600 }}>Órdenes de compra</div>
+      {orderResults.map((o) => (
+        <div
+          key={`o${o.id}`}
+          className="search-result-item"
+          onClick={() => {
+            closeSearch();
+            navigate(`/afiliados/${o.affiliate.id}?tab=prestamos`);
+          }}
+        >
+          <span className="search-result-name">Orden {o.orderNumber}</span>
+          <span className="search-result-meta">
+            <span>{o.affiliate.lastName}, {o.affiliate.firstName}</span>
+            <span>{new Date(o.grantedAt).toLocaleDateString("es-AR")}</span>
+          </span>
+        </div>
+      ))}
+    </>
+  );
 
   return (
     <div className="app-shell">
@@ -44,22 +83,26 @@ export default function Layout({
         <div className="search-wrapper">
           <form className="search-form" onSubmit={handleSearch}>
             <input
-              placeholder="Buscar por nombre, DNI o N° de asociado..."
+              placeholder="Buscar por nombre, DNI, N° de asociado o N° de orden..."
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
             <button type="submit">Buscar</button>
           </form>
 
-          {results.length > 0 && (
+          {(hasResults || searched) && (
             <div className="search-results">
+              {!hasResults && <div className="search-result-item">Sin resultados</div>}
+              {orderList}
+              {results.length > 0 && orderResults.length > 0 && (
+                <div className="search-result-meta" style={{ padding: "6px 12px", fontWeight: 600 }}>Asociados</div>
+              )}
               {results.map((r) => (
                 <div
                   key={r.id}
                   className="search-result-item"
                   onClick={() => {
-                    setResults([]);
-                    setQuery("");
+                    closeSearch();
                     navigate(`/afiliados/${r.id}`);
                   }}
                 >
@@ -83,6 +126,8 @@ export default function Layout({
           {canAudit && <Link to="/auditoria">Auditoría</Link>}
           {canAgreements && <Link to="/convenios">Convenios</Link>}
           {canInventory && <Link to="/inventario">Inventario</Link>}
+          {canFinance && <Link to="/cobranzas">Cobranzas</Link>}
+          {canFinance && <Link to="/caja">Caja</Link>}
           <button className="link-button" onClick={onLogout}>Salir</button>
         </nav>
       </header>
@@ -94,8 +139,7 @@ export default function Layout({
               key={r.id}
               className="search-result-item"
               onClick={() => {
-                setResults([]);
-                setQuery("");
+                closeSearch();
                 navigate(`/afiliados/${r.id}`);
               }}
             >

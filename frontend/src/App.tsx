@@ -10,6 +10,8 @@ import Companies from "./pages/Companies";
 import AuditLog from "./pages/AuditLog";
 import Agreements from "./pages/Agreements";
 import Inventory from "./pages/Inventory";
+import Collections from "./pages/Collections";
+import Cash from "./pages/Cash";
 import Roles from "./pages/Roles";
 import Layout from "./components/Layout";
 
@@ -59,6 +61,7 @@ export default function App() {
   const canAudit = can("audit.view");
   const canAgreements = can("agreements.manage");
   const canInventory = can("inventory.manage");
+  const canFinance = can("finance.manage");
 
   return (
     <Layout
@@ -70,6 +73,7 @@ export default function App() {
       canAudit={canAudit}
       canAgreements={canAgreements}
       canInventory={canInventory}
+      canFinance={canFinance}
     >
       <Routes>
         <Route path="/" element={<Dashboard />} />
@@ -82,6 +86,8 @@ export default function App() {
         {canAudit && <Route path="/auditoria" element={<AuditLog />} />}
         {canAgreements && <Route path="/convenios" element={<Agreements />} />}
         {canInventory && <Route path="/inventario" element={<Inventory />} />}
+        {canFinance && <Route path="/cobranzas" element={<Collections />} />}
+        {canFinance && <Route path="/caja" element={<Cash />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </Layout>

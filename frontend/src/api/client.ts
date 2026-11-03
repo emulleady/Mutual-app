@@ -76,8 +76,14 @@ export const api = {
     request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   dashboard: () => request("/dashboard"),
   searchAffiliates: (q: string) => request(`/affiliates/search?q=${encodeURIComponent(q)}`),
-  listAffiliates: (params?: { sort?: string }) =>
-    request(`/affiliates${params?.sort ? `?sort=${params.sort}` : ""}`),
+  listAffiliates: (params?: { sort?: string; status?: string }) => {
+    const qs = new URLSearchParams();
+    if (params?.sort) qs.set("sort", params.sort);
+    if (params?.status) qs.set("status", params.status);
+    const q = qs.toString();
+    return request(`/affiliates${q ? `?${q}` : ""}`);
+  },
+  searchLoans: (q: string) => request(`/loans/search?q=${encodeURIComponent(q)}`),
   getAffiliate: (id: number) => request(`/affiliates/${id}`),
   createAffiliate: (data: unknown) =>
     request("/affiliates", { method: "POST", body: JSON.stringify(data) }),
@@ -151,6 +157,33 @@ export const api = {
   createInventoryPurchase: (itemId: number, data: unknown) =>
     request(`/inventory/items/${itemId}/purchases`, { method: "POST", body: JSON.stringify(data) }),
   getInventorySummary: (month: string) => request(`/inventory/summary?month=${month}`),
+  // ---- Cobranzas y caja ----
+  financeAccounts: () => request("/finance/accounts"),
+  createFinanceAccount: (data: unknown) => request("/finance/accounts", { method: "POST", body: JSON.stringify(data) }),
+  updateFinanceAccount: (id: number, data: unknown) =>
+    request(`/finance/accounts/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  financeCategories: () => request("/finance/categories"),
+  createFinanceCategory: (data: unknown) => request("/finance/categories", { method: "POST", body: JSON.stringify(data) }),
+  listMovements: (params: Record<string, string>) => {
+    const q = new URLSearchParams(Object.entries(params).filter(([, v]) => v !== "")).toString();
+    return request(`/finance/movements${q ? `?${q}` : ""}`);
+  },
+  createMovement: (data: unknown) => request("/finance/movements", { method: "POST", body: JSON.stringify(data) }),
+  voidMovement: (id: number, reason: string) =>
+    request(`/finance/movements/${id}/void`, { method: "POST", body: JSON.stringify({ reason }) }),
+  uploadMovementAttachment: (id: number, file: File) => uploadFile(`/finance/movements/${id}/attachments`, file),
+  downloadMovementAttachment: (id: number, attId: number, name: string) =>
+    downloadFile(`/finance/movements/${id}/attachments/${attId}`, name),
+  financeSummary: (from: string, to: string) => request(`/finance/summary?from=${from}&to=${to}`),
+  downloadFinanceExport: (from: string, to: string) =>
+    downloadFile(`/finance/export?from=${from}&to=${to}`, `caja-${from}-a-${to}.xlsx`),
+  collectionPreview: (companyId: number, month: string) =>
+    request(`/finance/collections/preview?companyId=${companyId}&month=${month}`),
+  collectionsSummary: (month: string) => request(`/finance/collections/summary?month=${month}`),
+  listCollections: (month: string) => request(`/finance/collections?month=${month}`),
+  createCollection: (data: unknown) => request("/finance/collections", { method: "POST", body: JSON.stringify(data) }),
+  voidCollection: (id: number, reason: string) =>
+    request(`/finance/collections/${id}/void`, { method: "POST", body: JSON.stringify({ reason }) }),
   importCompanies: (file: File) => uploadFile("/companies/import", file),
   importAffiliates: (file: File) => uploadFile("/affiliates/import", file),
   downloadCompanyReportExcel: (id: number, companyName: string) =>
@@ -159,6 +192,8 @@ export const api = {
     downloadFile(`/companies/${id}/liquidacion?month=${month}`, `liquidacion-${companyName}-${month}.xlsx`),
   downloadCompanyReportPdf: (id: number, companyName: string) =>
     downloadFile(`/companies/${id}/report/pdf`, `estado-afiliados-${companyName}.pdf`),
+  updateDependent: (affiliateId: number, depId: number, data: Record<string, unknown>) =>
+    request(`/affiliates/${affiliateId}/dependents/${depId}`, { method: "PUT", body: JSON.stringify(data) }),
   createDependent: (affiliateId: number, data: unknown) =>
     request(`/affiliates/${affiliateId}/dependents`, { method: "POST", body: JSON.stringify(data) }),
   downloadFichaAlta: (affiliateId: number, name: string) =>
