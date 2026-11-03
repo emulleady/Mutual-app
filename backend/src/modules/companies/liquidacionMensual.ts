@@ -93,29 +93,46 @@ export async function computeLiquidacionData(companyId: number, month: string) {
     if (!socioType) return 0;
     return feeByType.get(socioType.trim().toLowerCase()) ?? 0;
   };
-  let withoutFee = 0; // personas con tipo de socio pero sin valor de cuota configurado
+  let withoutFee = 0; // personas a las que no se les pudo calcular cuota social
   let feeTotal = 0;
+  // Quienes quedan SIN cuota social y por que, para revisarlos (hoja "REVISAR").
+  const review: { number: string; name: string; who: string; reason: string }[] = [];
 
   for (const a of affiliates) {
     const lines: Line[] = [];
+    const titularName = `${a.lastName}, ${a.firstName}`.toUpperCase();
 
-    // Cuota social del titular y de sus familiares.
-    const titularFee = feeFor(a.feeAmount, a.socioType);
-    if (titularFee > 0) {
-      lines.push({ detalle: `Cuota social - Titular${a.socioType ? ` (${a.socioType})` : ""}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(titularFee.toFixed(2)) });
-      feeTotal += titularFee;
-    } else if (a.socioType && a.socioType.toLowerCase() !== "no socio") {
-      withoutFee++;
+    // Cuota social del titular: sin tipo de socio cargado se toma como "Activo"
+    // (igual que en la Orden de Compra). Un valor propio del asociado pisa el
+    // valor del tipo de socio.
+    const titularType = a.socioType || "Activo";
+    if (titularType.toLowerCase() !== "no socio") {
+      const titularFee = feeFor(a.feeAmount, titularType);
+      if (titularFee > 0) {
+        lines.push({ detalle: `Cuota social - Titular (${titularType})`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(titularFee.toFixed(2)) });
+        feeTotal += titularFee;
+      } else {
+        withoutFee++;
+        review.push({ number: a.affiliateNumber, name: titularName, who: "Titular", reason: `No hay valor de cuota para el tipo de socio "${titularType}" (cargarlo en Configuración o en la ficha)` });
+      }
     }
+
+    // Cuota social de cada familiar activo (adherente, participante...).
     for (const d of a.dependents) {
       if (d.registryStatus && d.registryStatus.toUpperCase().includes("BAJA")) continue;
-      if (!d.socioType || d.socioType.toLowerCase() === "no socio") continue;
+      if (!d.socioType) {
+        review.push({ number: a.affiliateNumber, name: titularName, who: `Familiar ${d.fullName}`, reason: "Falta asignarle el tipo de socio (Adherente, Participante…) en la pestaña Familiares" });
+        withoutFee++;
+        continue;
+      }
+      if (d.socioType.toLowerCase() === "no socio") continue;
       const fee = feeFor(d.feeAmount, d.socioType);
       if (fee > 0) {
         lines.push({ detalle: `Cuota social - ${d.socioType}: ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(fee.toFixed(2)) });
         feeTotal += fee;
       } else {
         withoutFee++;
+        review.push({ number: a.affiliateNumber, name: titularName, who: `Familiar ${d.fullName}`, reason: `No hay valor de cuota para el tipo de socio "${d.socioType}"` });
       }
     }
 
@@ -145,7 +162,7 @@ export async function computeLiquidacionData(companyId: number, month: string) {
 
   const grandTotal = Number(people.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2));
   const installmentsCount = people.reduce((sum, p) => sum + p.lines.filter((l) => l.orden !== "").length, 0);
-  return { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee };
+  return { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee, review };
 }
 
 export async function buildCompanyMonthlyLiquidacion(
@@ -154,7 +171,7 @@ export async function buildCompanyMonthlyLiquidacion(
 ): Promise<{ buffer: Buffer; companyName: string; empty: boolean } | null> {
   const data = await computeLiquidacionData(companyId, month);
   if (!data) return null;
-  const { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee } = data;
+  const { company, range, people, grandTotal, installmentsCount, feeTotal, withoutFee, review } = data;
   const periodLabel = `${MONTH_NAMES[range.monthIndex]} ${range.year}`;
 
   // --- Planilla ---
@@ -326,9 +343,23 @@ export async function buildCompanyMonthlyLiquidacion(
   const summary = ws.getCell(row, 1);
   summary.value =
     `${people.length} asociado(s) · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} · ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
-    (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin valor de cuota configurado` : "");
+    (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin cuota social: ver la hoja REVISAR` : "");
   summary.font = { name: "Calibri", size: 9, italic: true, color: { argb: "FF5B7A99" } };
   summary.alignment = { horizontal: "right", vertical: "middle" };
+
+  // Hoja "REVISAR": quienes no tienen cuota social calculada y por que.
+  if (review.length > 0) {
+    const rv = workbook.addWorksheet("REVISAR");
+    rv.columns = [{ width: 16 }, { width: 34 }, { width: 34 }, { width: 80 }];
+    rv.addRow(["Personas SIN cuota social en esta liquidación (para revisar antes de enviarla)"]).font = { bold: true, size: 12 };
+    rv.addRow([]);
+    const hr = rv.addRow(["N.º ASOCIADO", "TITULAR", "PERSONA", "MOTIVO"]);
+    hr.eachCell((c) => {
+      c.font = { bold: true, color: { argb: WHITE } };
+      c.fill = fill(NAVY_SOFT);
+    });
+    for (const r of review) rv.addRow([r.number, r.name, r.who, r.reason]);
+  }
 
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   return { buffer, companyName: company.name, empty: people.length === 0 };
