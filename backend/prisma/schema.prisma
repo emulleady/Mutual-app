@@ -515,3 +515,15 @@ model CompanyPaymentInstallment {
 
   @@map("company_payment_installments")
 }
+
+// Dia de cierre del resumen mensual (como una tarjeta de credito): las ordenes
+// de compra hechas despues de ese dia del mes entran en el resumen siguiente.
+// closingDay null = sin fecha de cierre (no se corre ninguna orden).
+model StatementSetting {
+  id              Int      @id @default(1)
+  closingDay      Int?
+  updatedByUserId Int?
+  updatedAt       DateTime @updatedAt
+
+  @@map("statement_settings")
+}

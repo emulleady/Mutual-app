@@ -95,6 +95,38 @@ router.post("/order-counter", requirePermission("settings.manage"), async (req: 
   res.json(updated);
 });
 
+// Dia de cierre del resumen (como una tarjeta): las ordenes hechas despues de
+// ese dia pasan al resumen del mes siguiente. Sin dia cargado, no se corre nada.
+router.get("/closing-day", async (_req, res) => {
+  const row = await prisma.statementSetting.findUnique({ where: { id: 1 } });
+  res.json({ closingDay: row?.closingDay ?? null, updatedAt: row?.updatedAt ?? null });
+});
+
+const closingDaySchema = z.object({ closingDay: z.number().int().min(1).max(31).nullable() });
+
+router.post("/closing-day", requirePermission("settings.manage"), async (req: AuthenticatedRequest, res) => {
+  const parsed = closingDaySchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "El día de cierre debe estar entre 1 y 31" });
+
+  const before = await prisma.statementSetting.findUnique({ where: { id: 1 } });
+  const updated = await prisma.statementSetting.upsert({
+    where: { id: 1 },
+    update: { closingDay: parsed.data.closingDay, updatedByUserId: req.user?.id },
+    create: { id: 1, closingDay: parsed.data.closingDay, updatedByUserId: req.user?.id },
+  });
+
+  await logAudit({
+    userId: req.user?.id,
+    action: "update",
+    entityType: "statement_settings",
+    entityId: 1,
+    beforeData: before,
+    afterData: updated,
+    ipAddress: req.ip,
+  });
+  res.json({ closingDay: updated.closingDay, updatedAt: updated.updatedAt });
+});
+
 // Valor de cuota por defecto segun el tipo de socio. Cualquier usuario
 // autenticado puede consultarlo (se usa para precargar el campo al cargar
 // o editar un asociado), pero solo el administrador puede modificarlo.

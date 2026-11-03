@@ -22,6 +22,7 @@ export default function Collections() {
   const [error, setError] = useState<string | null>(null);
   const [okMsg, setOkMsg] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [companiesError, setCompaniesError] = useState<string | null>(null);
 
   function load() {
     api.collectionsSummary(month).then(setSummary).catch(() => setSummary(null));
@@ -29,7 +30,13 @@ export default function Collections() {
   }
   useEffect(load, [month]);
   useEffect(() => {
-    api.listCompanies().then((c: any[]) => setCompanies(c.filter((x) => x.active))).catch(() => {});
+    api.listCompanies()
+      .then((c: any) => {
+        if (!Array.isArray(c)) throw new Error("Respuesta inesperada del servidor");
+        setCompanies(c);
+        setCompaniesError(null);
+      })
+      .catch((err: any) => setCompaniesError(err?.message || "No se pudo cargar la lista de empresas"));
     api.financeAccounts().then((a: any[]) => {
       const act = a.filter((x) => x.active);
       setAccounts(act);
@@ -119,9 +126,15 @@ export default function Collections() {
       {showForm && (
         <form className="inline-form" onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
           <select value={form.companyId} onChange={(e) => setForm({ ...form, companyId: e.target.value })} required>
-            <option value="">Empresa…</option>
-            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            <option value="">{companies.length === 0 ? "No hay empresas cargadas" : "Empresa…"}</option>
+            {companies.map((c) => <option key={c.id} value={c.id}>{c.name}{c.active === false ? " (inactiva)" : ""}</option>)}
           </select>
+          {companiesError && <div className="error-box" style={{ flexBasis: "100%" }}>No se pudo cargar la lista de empresas: {companiesError}</div>}
+          {!companiesError && companies.length === 0 && (
+            <div className="error-box" style={{ flexBasis: "100%" }}>
+              Todavía no hay empresas cargadas. Cargalas o importalas desde la pantalla Empresas.
+            </div>
+          )}
           <input type="date" max={today()} value={form.receivedAt} onChange={(e) => setForm({ ...form, receivedAt: e.target.value })} required />
           <input type="number" step="0.01" min="0.01" placeholder="Monto recibido" value={form.amount}
             onChange={(e) => setForm({ ...form, amount: e.target.value })} required />

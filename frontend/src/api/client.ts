@@ -109,6 +109,9 @@ export const api = {
   getOrderCounter: () => request("/settings/order-counter"),
   setOrderCounter: (nextNumber: number) =>
     request("/settings/order-counter", { method: "POST", body: JSON.stringify({ nextNumber }) }),
+  getClosingDay: () => request("/settings/closing-day"),
+  setClosingDay: (closingDay: number | null) =>
+    request("/settings/closing-day", { method: "POST", body: JSON.stringify({ closingDay }) }),
   getMembershipFees: () => request("/settings/membership-fees"),
   setMembershipFee: (socioType: string, feeAmount: number) =>
     request("/settings/membership-fees", { method: "POST", body: JSON.stringify({ socioType, feeAmount }) }),

@@ -11,6 +11,10 @@ export default function Settings() {
   const [orderCounter, setOrderCounter] = useState<any | null>(null);
   const [nextNumberInput, setNextNumberInput] = useState("");
   const [counterError, setCounterError] = useState<string | null>(null);
+  const [closingDay, setClosingDay] = useState<number | null>(null);
+  const [closingInput, setClosingInput] = useState("");
+  const [closingMsg, setClosingMsg] = useState<string | null>(null);
+  const [closingError, setClosingError] = useState<string | null>(null);
   const [fees, setFees] = useState<any[]>([]);
   const [feeInputs, setFeeInputs] = useState<Record<string, string>>({});
   const [feeError, setFeeError] = useState<string | null>(null);
@@ -39,6 +43,28 @@ export default function Settings() {
       loadFees();
     } catch (err: any) {
       setFeeError(err.message || "No se pudo guardar el valor de cuota");
+    }
+  }
+
+  function loadClosing() {
+    api.getClosingDay().then((r: any) => {
+      setClosingDay(r.closingDay);
+      setClosingInput(r.closingDay ? String(r.closingDay) : "");
+    }).catch(() => {});
+  }
+  useEffect(loadClosing, []);
+
+  async function handleClosingSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setClosingError(null);
+    setClosingMsg(null);
+    try {
+      const value = closingInput.trim() === "" ? null : Number(closingInput);
+      await api.setClosingDay(value);
+      setClosingMsg(value ? `Guardado: el resumen cierra el día ${value}.` : "Guardado: sin fecha de cierre.");
+      loadClosing();
+    } catch (err: any) {
+      setClosingError(err.message || "No se pudo guardar el día de cierre");
     }
   }
 
@@ -140,6 +166,33 @@ export default function Settings() {
         />
         {counterError && <div className="error-box">{counterError}</div>}
         <button type="submit">Guardar número</button>
+      </form>
+
+      <h1 style={{ marginTop: 40 }}>Fecha de cierre del resumen</h1>
+      <p>
+        {closingDay
+          ? `El resumen cierra el día ${closingDay} de cada mes.`
+          : "No hay fecha de cierre cargada: todas las órdenes entran en el resumen que les corresponde por su fecha."}
+      </p>
+      <p className="note">
+        Funciona como el cierre de una tarjeta de crédito. Una orden de compra hecha hasta el día de cierre
+        (inclusive) entra en el resumen normal; una hecha después de ese día pasa al resumen del mes siguiente.
+        {closingDay
+          ? ` Ejemplo con cierre el ${closingDay}: una orden del día ${closingDay} tiene su primera cuota en el resumen del mes siguiente; ${closingDay < 31 ? ` una del día ${closingDay + 1}, un mes después.` : ""}`
+          : ""}{" "}
+        Se aplica a las órdenes que se carguen (o cuya fecha se cambie) desde ahora; las que ya están cargadas no se mueven.
+        Dejá el campo vacío para no usar fecha de cierre.
+      </p>
+      <form className="inline-form" onSubmit={handleClosingSubmit}>
+        <input
+          type="number" min={1} max={31}
+          placeholder="Día de cierre (1 a 31)"
+          value={closingInput}
+          onChange={(e) => setClosingInput(e.target.value)}
+        />
+        {closingError && <div className="error-box">{closingError}</div>}
+        {closingMsg && <span className="note" style={{ margin: 0 }}>{closingMsg}</span>}
+        <button type="submit">Guardar día de cierre</button>
       </form>
 
       <h1 style={{ marginTop: 40 }}>Valor de cuota por tipo de socio</h1>

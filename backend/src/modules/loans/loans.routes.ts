@@ -5,6 +5,7 @@ import { AuthenticatedRequest, requireAuth, requirePermission, userHasPermission
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { recalculateOverdueInstallments } from "./mora";
 import { generateOrdenCompraPdf } from "./forms";
+import { getClosingDay, statementShift } from "./statement";
 
 const router = Router();
 router.use(requireAuth);
@@ -143,6 +144,10 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
   const data = parsed.data;
   const installmentValue = Number((data.amount / data.installmentsCount).toFixed(2));
   const grantedAt = data.grantedAt ? new Date(data.grantedAt) : new Date();
+  // Fecha de cierre (como tarjeta de credito): si la orden es posterior al
+  // dia de cierre, su primera cuota pasa al resumen siguiente.
+  const closingDay = await getClosingDay();
+  const shift = statementShift(grantedAt, closingDay);
 
   // Cambiar la fecha de la orden (por ejemplo para cargar una orden hecha
   // antes de usar el sistema) requiere un permiso especial.
@@ -179,7 +184,7 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
       installments: {
         create: Array.from({ length: data.installmentsCount }, (_, i) => {
           const dueDate = new Date(grantedAt);
-          dueDate.setMonth(dueDate.getMonth() + i + 1);
+          dueDate.setMonth(dueDate.getMonth() + i + 1 + shift);
           return { number: i + 1, dueDate, amount: installmentValue };
         }),
       },
@@ -337,10 +342,11 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
     await tx.loan.update({ where: { id }, data: updateData });
 
     if (updateData.grantedAt) {
+      const editShift = statementShift(updateData.grantedAt, await getClosingDay());
       const unpaid = loan.installments.filter((i) => i.status !== "paid");
       for (const inst of unpaid) {
         const dueDate = new Date(updateData.grantedAt);
-        dueDate.setMonth(dueDate.getMonth() + inst.number);
+        dueDate.setMonth(dueDate.getMonth() + inst.number + editShift);
         await tx.loanInstallment.update({
           where: { id: inst.id },
           data: { dueDate, status: "pending" },
