@@ -17,6 +17,12 @@ export const ALL_PERMISSION_KEYS = [
   "agreements.manage",
   "inventory.manage",
   "finance.manage",
+  "orders.view",
+  "companies.view",
+  "agreements.view",
+  "inventory.view",
+  "finance.view",
+  "settings.view",
 ];
 
 export async function ensurePermissionsExist(): Promise<void> {

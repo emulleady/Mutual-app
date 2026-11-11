@@ -1,9 +1,11 @@
+import { can } from "../utils/permissions";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
 type Kind = "empresa" | "comercio";
 
 export default function Agreements() {
+  const canManage = can("agreements.manage");
   const [kind, setKind] = useState<Kind>("empresa");
   const [agreements, setAgreements] = useState<any[]>([]);
   const [showForm, setShowForm] = useState(false);
@@ -55,7 +57,7 @@ export default function Agreements() {
     <div>
       <div className="page-header">
         <h1>Convenios</h1>
-        <button onClick={startCreate}>{showForm && !editingId ? "Cancelar" : `Nuevo convenio con ${kind === "empresa" ? "empresa" : "comercio"}`}</button>
+        {canManage && <button onClick={startCreate}>{showForm && !editingId ? "Cancelar" : `Nuevo convenio con ${kind === "empresa" ? "empresa" : "comercio"}`}</button>}
       </div>
 
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -98,9 +100,11 @@ export default function Agreements() {
               <td>{a.details || "—"}</td>
               <td><span className={`badge badge-${a.active ? "active" : "inactive"}`}>{a.active ? "Vigente" : "Dado de baja"}</span></td>
               <td>
-                <button className="small-button" onClick={() => handleToggle(a.id)}>
-                  {a.active ? "Dar de baja" : "Reactivar"}
-                </button>
+                {canManage && (
+                  <button className="small-button" onClick={() => handleToggle(a.id)}>
+                    {a.active ? "Dar de baja" : "Reactivar"}
+                  </button>
+                )}
               </td>
             </tr>
           ))}

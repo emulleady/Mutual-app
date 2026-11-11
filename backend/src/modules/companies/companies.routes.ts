@@ -5,7 +5,7 @@ import PDFDocument from "pdfkit";
 import path from "path";
 import multer from "multer";
 import { prisma } from "../../db";
-import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
+import { AuthenticatedRequest, requireAuth, requirePermission, requireAreaAccess } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
 import { getLogoPath } from "../../shared/assets";
 import { buildCompanyReport } from "./report";
@@ -26,7 +26,7 @@ router.get("/", async (_req, res) => {
 // Detalle de una empresa con los afiliados que trabajan ahi (para el
 // descuento por recibo de sueldo). En Etapa 3 tambien va a listar los
 // beneficios en los que esta empresa figura como proveedor.
-router.get("/:id", async (req, res) => {
+router.get("/:id", requireAreaAccess("companies"), async (req, res) => {
   const id = Number(req.params.id);
   const company = await prisma.company.findUnique({
     where: { id },
@@ -196,7 +196,7 @@ router.post("/:id/toggle-active", requirePermission("companies.manage"), async (
 
 // Liquidación mensual para la empresa: cuotas de órdenes de compra que
 // vencen en el mes elegido (?month=AAAA-MM) y siguen impagas.
-router.get("/:id/liquidacion", async (req, res) => {
+router.get("/:id/liquidacion", requireAreaAccess("companies"), async (req, res) => {
   const id = Number(req.params.id);
   const month = String(req.query.month || "");
   const result = await buildCompanyMonthlyLiquidacion(id, month);
@@ -208,7 +208,7 @@ router.get("/:id/liquidacion", async (req, res) => {
   res.send(result.buffer);
 });
 
-router.get("/:id/report/excel", async (req, res) => {
+router.get("/:id/report/excel", requireAreaAccess("companies"), async (req, res) => {
   const id = Number(req.params.id);
   const report = await buildCompanyReport(id);
   if (!report) return res.status(404).json({ error: "Empresa no encontrada" });
@@ -235,7 +235,7 @@ router.get("/:id/report/excel", async (req, res) => {
   res.send(buffer);
 });
 
-router.get("/:id/report/pdf", async (req, res) => {
+router.get("/:id/report/pdf", requireAreaAccess("companies"), async (req, res) => {
   const id = Number(req.params.id);
   const report = await buildCompanyReport(id);
   if (!report) return res.status(404).json({ error: "Empresa no encontrada" });

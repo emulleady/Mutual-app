@@ -13,6 +13,7 @@ export default function Layout({
   canAgreements,
   canInventory,
   canFinance,
+  canOrders,
 }: {
   children: React.ReactNode;
   onLogout: () => void;
@@ -24,6 +25,7 @@ export default function Layout({
   canAgreements?: boolean;
   canInventory?: boolean;
   canFinance?: boolean;
+  canOrders?: boolean;
 }) {
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
@@ -119,7 +121,7 @@ export default function Layout({
         <nav>
           <Link to="/">Resumen</Link>
           <Link to="/afiliados">Asociados</Link>
-          <Link to="/ordenes">Órdenes</Link>
+          {canOrders && <Link to="/ordenes">Órdenes</Link>}
           {canSettings && <Link to="/configuracion">Configuración</Link>}
           {canUsers && <Link to="/usuarios">Usuarios</Link>}
           {canUsers && <Link to="/roles">Roles</Link>}

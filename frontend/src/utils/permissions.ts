@@ -10,3 +10,8 @@ export function hasPermission(key: string): boolean {
     return false;
   }
 }
+
+export const can = hasPermission;
+
+// "Ver" lo tiene quien puede ver o quien puede gestionar el área.
+export const canView = (area: string) => hasPermission(`${area}.view`) || hasPermission(`${area}.manage`);

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../../db";
-import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
+import { AuthenticatedRequest, requireAuth, requirePermission, requireAreaAccess } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
 import { parseMonth } from "../companies/liquidacionMensual";
 
@@ -10,7 +10,7 @@ router.use(requireAuth);
 // Todo este modulo requiere el permiso "inventory.manage" (lo tiene el
 // Administrador por defecto; a Matías u otro usuario puntual se le puede
 // sumar como permiso individual desde Usuarios).
-router.use(requirePermission("inventory.manage"));
+router.use(requireAreaAccess("inventory"));
 
 const round2 = (n: number) => Number(n.toFixed(2));
 

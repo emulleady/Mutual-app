@@ -3,7 +3,7 @@ import { z } from "zod";
 import multer from "multer";
 import ExcelJS from "exceljs";
 import { prisma } from "../../db";
-import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
+import { AuthenticatedRequest, requireAuth, requirePermission, requireAreaAccess } from "../../middleware/auth";
 import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { computeLiquidacionData, parseMonth } from "../companies/liquidacionMensual";
 
@@ -12,7 +12,7 @@ router.use(requireAuth);
 // Todo el modulo (cobranzas de empresas + caja) requiere el permiso
 // "finance.manage": lo tiene el Administrador y se le puede dar a un rol
 // o a un usuario puntual.
-router.use(requirePermission("finance.manage"));
+router.use(requireAreaAccess("finance"));
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 const ALLOWED_MIME = ["image/jpeg", "image/png", "image/webp", "application/pdf"];

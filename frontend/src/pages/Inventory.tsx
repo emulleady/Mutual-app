@@ -1,3 +1,4 @@
+import { can } from "../utils/permissions";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 
@@ -9,6 +10,7 @@ const currentMonth = () => new Date().toISOString().slice(0, 7);
 const EMPTY_ITEM = { name: "", quantity: "", unitValue: "", trackKm: false };
 
 export default function Inventory() {
+  const canManage = can("inventory.manage");
   const [items, setItems] = useState<any[]>([]);
   const [loans, setLoans] = useState<any[]>([]);
   const [affiliates, setAffiliates] = useState<any[]>([]);
@@ -213,10 +215,12 @@ export default function Inventory() {
       <div className="page-header">
         <h1>Inventario</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          <button className="small-button" onClick={() => openLoanForm()}>Registrar préstamo</button>
-          <button onClick={() => (showItemForm ? setShowItemForm(false) : startCreateItem())}>
-            {showItemForm ? "Cancelar" : "Nuevo artículo"}
-          </button>
+          {canManage && <button className="small-button" onClick={() => openLoanForm()}>Registrar préstamo</button>}
+          {canManage && (
+            <button onClick={() => (showItemForm ? setShowItemForm(false) : startCreateItem())}>
+              {showItemForm ? "Cancelar" : "Nuevo artículo"}
+            </button>
+          )}
         </div>
       </div>
 
@@ -389,11 +393,15 @@ export default function Inventory() {
               <td>{it.unitValue ? money(it.unitValue) : "—"}</td>
               <td>{it.unitValue ? money(it.totalValue) : "—"}</td>
               <td style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-                <button className="small-button" onClick={() => openLoanForm(it.id)} disabled={it.available <= 0}>
-                  Prestar
-                </button>
-                <button className="small-button" onClick={() => openPurchase(it)}>Comprar</button>
-                <button className="small-button" onClick={() => startEditItem(it)}>Editar</button>
+                {canManage && (
+                  <>
+                    <button className="small-button" onClick={() => openLoanForm(it.id)} disabled={it.available <= 0}>
+                      Prestar
+                    </button>
+                    <button className="small-button" onClick={() => openPurchase(it)}>Comprar</button>
+                    <button className="small-button" onClick={() => startEditItem(it)}>Editar</button>
+                  </>
+                )}
               </td>
             </tr>
           ))}
@@ -552,7 +560,7 @@ export default function Inventory() {
               <td>{l.unitValueAtLoan ? money(l.quantity * l.unitValueAtLoan) : "—"}</td>
               <td>{l.notes || "—"}</td>
               <td>
-                {!l.returnedAt && (
+                {canManage && !l.returnedAt && (
                   <button className="small-button" onClick={() => handleReturn(l)}>Marcar devuelto</button>
                 )}
               </td>

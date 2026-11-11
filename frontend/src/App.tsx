@@ -15,6 +15,7 @@ import Collections from "./pages/Collections";
 import Cash from "./pages/Cash";
 import Roles from "./pages/Roles";
 import Layout from "./components/Layout";
+import { canView } from "./utils/permissions";
 
 function loadPermissions(): string[] {
   try {
@@ -56,13 +57,14 @@ export default function App() {
   // mas los individuales). El Administrador siempre tiene todo. El
   // backend igual vuelve a exigir cada permiso en cada endpoint.
   const can = (key: string) => isAdmin || permissions.includes(key);
-  const canSettings = can("settings.manage");
+  const canSettings = canView("settings");
   const canUsers = can("users.manage");
-  const canCompanies = can("companies.manage");
+  const canCompanies = canView("companies");
   const canAudit = can("audit.view");
-  const canAgreements = can("agreements.manage");
-  const canInventory = can("inventory.manage");
-  const canFinance = can("finance.manage");
+  const canAgreements = canView("agreements");
+  const canInventory = canView("inventory");
+  const canFinance = canView("finance");
+  const canOrders = can("orders.view");
 
   return (
     <Layout
@@ -75,12 +77,13 @@ export default function App() {
       canAgreements={canAgreements}
       canInventory={canInventory}
       canFinance={canFinance}
+      canOrders={canOrders}
     >
       <Routes>
         <Route path="/" element={<Dashboard />} />
         <Route path="/afiliados" element={<AffiliatesList />} />
         <Route path="/afiliados/:id" element={<AffiliateProfile />} />
-        <Route path="/ordenes" element={<Orders />} />
+        {canOrders && <Route path="/ordenes" element={<Orders />} />}
         {canSettings && <Route path="/configuracion" element={<Settings />} />}
         {canUsers && <Route path="/usuarios" element={<Users />} />}
         {canUsers && <Route path="/roles" element={<Roles />} />}

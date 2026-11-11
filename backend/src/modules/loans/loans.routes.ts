@@ -47,7 +47,7 @@ async function nextOrderNumber(): Promise<string> {
 
 // Módulo de consulta de órdenes de compra: listado con filtros combinables.
 // Solo lectura (para ver y consultar; no modifica nada).
-router.get("/", async (req, res) => {
+router.get("/", requirePermission("orders.view"), async (req, res) => {
   const q = req.query as Record<string, string | undefined>;
   const and: any[] = [];
   const day = (v?: string, end = false) => (v ? new Date(`${v}T${end ? "23:59:59" : "00:00:00"}-03:00`) : undefined);

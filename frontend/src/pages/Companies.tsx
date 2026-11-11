@@ -1,9 +1,11 @@
+import { can } from "../utils/permissions";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import { affiliateStatusLabels, translate } from "../utils/labels";
 
 export default function Companies() {
+  const canManage = can("companies.manage");
   const [companies, setCompanies] = useState<any[]>([]);
   const [selected, setSelected] = useState<any | null>(null);
   const [showForm, setShowForm] = useState(false);
@@ -135,9 +137,11 @@ export default function Companies() {
           cuando se incorpore el módulo de beneficios.
         </p>
 
-        <button className="small-button" style={{ marginTop: 16 }} onClick={() => handleToggle(selected.id)}>
-          {selected.active ? "Desactivar empresa" : "Activar empresa"}
-        </button>
+        {canManage && (
+          <button className="small-button" style={{ marginTop: 16 }} onClick={() => handleToggle(selected.id)}>
+            {selected.active ? "Desactivar empresa" : "Activar empresa"}
+          </button>
+        )}
       </div>
     );
   }
@@ -147,11 +151,13 @@ export default function Companies() {
       <div className="page-header">
         <h1>Empresas</h1>
         <div style={{ display: "flex", gap: 8 }}>
-          <label className="small-button" style={{ cursor: "pointer" }}>
-            {importing ? "Importando..." : "Importar Excel"}
-            <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
-          </label>
-          <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva empresa"}</button>
+          {canManage && (
+            <label className="small-button" style={{ cursor: "pointer" }}>
+              {importing ? "Importando..." : "Importar Excel"}
+              <input type="file" accept=".xlsx,.xls" onChange={handleImport} disabled={importing} style={{ display: "none" }} />
+            </label>
+          )}
+          {canManage && <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva empresa"}</button>}
         </div>
       </div>
       {importMsg && (

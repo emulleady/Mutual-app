@@ -1,9 +1,11 @@
+import { can } from "../utils/permissions";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
 const SOCIO_TYPES = ["Activo", "Adherente", "Participante Activo", "Participante Adherente", "Socio Deportivo", "Honorario"];
 
 export default function Settings() {
+  const readOnly = !can("settings.manage");
   const [rates, setRates] = useState<any[]>([]);
   const [rateType, setRateType] = useState<"daily" | "monthly">("monthly");
   const [rateValue, setRateValue] = useState("");
@@ -126,6 +128,8 @@ export default function Settings() {
 
   return (
     <div>
+      {readOnly && <p className="note">Solo lectura: no tenés permiso para modificar la configuración.</p>}
+      <fieldset disabled={readOnly} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <h1>Configuración — Tasa de interés por mora</h1>
       <p>
         {current
@@ -295,6 +299,7 @@ export default function Settings() {
           onChange={(e) => setNewSvcAmount(e.target.value)} style={{ width: 150 }} />
         <button type="submit">Agregar servicio</button>
       </form>
+      </fieldset>
     </div>
   );
 }

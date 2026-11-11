@@ -96,7 +96,8 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
   const fullNameNormal = `${affiliate.lastName}, ${affiliate.firstName}`;
   const fullNameUpper = `${affiliate.lastName} ${affiliate.firstName}`.toUpperCase();
   const orderNumber = loan.orderNumber || "";
-  const asociadoNumero = `${affiliate.affiliateNumber || ""}/00`;
+  // El número ya puede venir con sufijo ("36909756/00"): se normaliza para no duplicarlo.
+  const asociadoNumero = `${String(affiliate.affiliateNumber || "").split("/")[0]}/00`;
   // El encabezado "DATOS SOCIO ..." refleja el tipo de socio real
   // (Activo, Participante, Adherente, etc.), en vez de decir siempre
   // "ACTIVO" sin importar el tipo cargado en la ficha. Si el tipo ya

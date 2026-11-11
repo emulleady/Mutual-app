@@ -74,6 +74,20 @@ export async function userHasPermission(
   return !!fromRole;
 }
 
+// Para un área con permisos "ver" y "gestionar": las lecturas (GET) piden
+// "ver" o "gestionar"; cualquier otra acción pide "gestionar".
+export function requireAreaAccess(area: string) {
+  const view = requirePermission(`${area}.view`);
+  const manage = requirePermission(`${area}.manage`);
+  return async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (req.method === "GET" || req.method === "HEAD") {
+      if (req.user && (await userHasPermission(req.user, `${area}.manage`))) return next();
+      return view(req, res, next);
+    }
+    return manage(req, res, next);
+  };
+}
+
 // Middleware de autorizacion: exige que el rol del usuario, O un permiso
 // otorgado directamente a ese usuario puntual, incluya el permiso pedido.
 // Se verifica en el backend, no alcanza con ocultar botones en el frontend.

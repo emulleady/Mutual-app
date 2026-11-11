@@ -1,3 +1,4 @@
+import { can } from "../utils/permissions";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api/client";
 
@@ -10,6 +11,7 @@ const monthStart = () => `${today().slice(0, 7)}-01`;
 // con cuenta, categoria y comprobante. Los ingresos por cobranza de empresas
 // entran solos desde la pantalla Cobranzas.
 export default function Cash() {
+  const canManage = can("finance.manage");
   const [from, setFrom] = useState(monthStart());
   const [to, setTo] = useState(today());
   const [typeFilter, setTypeFilter] = useState("");
@@ -143,8 +145,8 @@ export default function Cash() {
         <h1>Caja</h1>
         <div style={{ display: "flex", gap: 8 }}>
           <button className="small-button" onClick={() => api.downloadFinanceExport(from, to)}>Descargar Excel</button>
-          <button className="small-button" onClick={() => setShowSetup((v) => !v)}>Cuentas y categorías</button>
-          <button onClick={() => { setShowForm((v) => !v); setError(null); }}>{showForm ? "Cancelar" : "Nuevo movimiento"}</button>
+          {canManage && <button className="small-button" onClick={() => setShowSetup((v) => !v)}>Cuentas y categorías</button>}
+          {canManage && <button onClick={() => { setShowForm((v) => !v); setError(null); }}>{showForm ? "Cancelar" : "Nuevo movimiento"}</button>}
         </div>
       </div>
 
@@ -306,7 +308,7 @@ export default function Cash() {
                 ))}
               </td>
               <td>
-                {!m.voided && m.source === "manual" && <button className="small-button" onClick={() => handleVoid(m)}>Anular</button>}
+                {canManage && !m.voided && m.source === "manual" && <button className="small-button" onClick={() => handleVoid(m)}>Anular</button>}
               </td>
             </tr>
           ))}

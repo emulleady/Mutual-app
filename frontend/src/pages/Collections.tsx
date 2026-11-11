@@ -1,3 +1,4 @@
+import { can } from "../utils/permissions";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
@@ -10,6 +11,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 // compara con lo que se le liquido y, si cubre todo, marca las cuotas de
 // ordenes de compra como pagas y registra el ingreso en la caja.
 export default function Collections() {
+  const canManage = can("finance.manage");
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<any | null>(null);
   const [list, setList] = useState<any[]>([]);
@@ -113,7 +115,7 @@ export default function Collections() {
         <h1>Cobranzas de empresas</h1>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} aria-label="Mes" />
-          <button onClick={() => (showForm ? setShowForm(false) : openFor())}>{showForm ? "Cancelar" : "Registrar cobranza"}</button>
+          {canManage && <button onClick={() => (showForm ? setShowForm(false) : openFor())}>{showForm ? "Cancelar" : "Registrar cobranza"}</button>}
         </div>
       </div>
       <p className="note">
@@ -192,7 +194,7 @@ export default function Collections() {
                 {r.remaining > 0.009 ? money(r.remaining) : r.remaining < -0.009 ? `${money(-r.remaining)} de más` : "Cobrado"}
               </td>
               <td>
-                {r.remaining > 0.009 && (
+                {canManage && r.remaining > 0.009 && (
                   <button className="small-button" onClick={() => openFor(r.companyId, r.remaining)}>Registrar cobranza</button>
                 )}
               </td>
@@ -227,7 +229,7 @@ export default function Collections() {
               <td>{p.account.name}</td>
               <td>{p._count.installments}</td>
               <td>{p.voided ? `ANULADA: ${p.voidedReason || ""}` : p.notes || ""}</td>
-              <td>{!p.voided && <button className="small-button" onClick={() => handleVoid(p)}>Anular</button>}</td>
+              <td>{canManage && !p.voided && <button className="small-button" onClick={() => handleVoid(p)}>Anular</button>}</td>
             </tr>
           ))}
           {list.length === 0 && <tr><td colSpan={7}>No hay cobranzas registradas en {month}.</td></tr>}
