@@ -70,14 +70,16 @@ model User {
   @@map("users")
 }
 
-// Permisos otorgados directamente a un usuario puntual, ademas de los
-// que ya le da su rol. Se suman (nunca restan) a los del rol: si el
-// rol ya lo da, esto es redundante pero inofensivo.
+// Excepciones por usuario sobre los permisos de su rol: se pueden SUMAR
+// permisos (granted = true) o QUITAR permisos del rol (granted = false).
 model UserPermission {
   userId       Int
   permissionId Int
   user         User       @relation(fields: [userId], references: [id])
   permission   Permission @relation(fields: [permissionId], references: [id])
+  // true = permiso extra (se suma al rol). false = permiso QUITADO a este
+  // usuario aunque su rol lo tenga.
+  granted      Boolean    @default(true)
 
   @@id([userId, permissionId])
   @@map("user_permissions")
@@ -120,6 +122,7 @@ model Affiliate {
   email          String?
   socioType      String?  // Tipo de Socio: Activo | Adherente | Participante | Honorario | No socio
   feeAmount      Float?   // Valor de cuota
+  medifeFee      Float?   // Cuota de Medife (se informa en la liquidación a la empresa)
   status         String   @default("active") // active | inactive | suspended
   branchId       Int?
   companyId      Int?     // empresa donde trabaja, para descuento por recibo de sueldo
@@ -142,6 +145,7 @@ model Affiliate {
   events         AffiliateEvent[]
   loans          Loan[]
   dependents     Dependent[]
+  services      PersonService[]
   inventoryLoans InventoryLoan[]
   periods        AffiliateMembershipPeriod[]
 
@@ -179,6 +183,7 @@ model Dependent {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   affiliate      Affiliate @relation(fields: [affiliateId], references: [id])
+  services       PersonService[]
 
   @@map("dependents")
 }
@@ -526,4 +531,36 @@ model StatementSetting {
   updatedAt       DateTime @updatedAt
 
   @@map("statement_settings")
+}
+
+// Catálogo de servicios (parametrizable desde Configuración). Cada servicio
+// tiene un costo sugerido que se precarga al asignarlo a una persona.
+model ServiceType {
+  id            Int      @id @default(autoincrement())
+  name          String   @unique
+  defaultAmount Float    @default(0)
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  assignments   PersonService[]
+
+  @@map("service_types")
+}
+
+// Servicio asignado a una persona puntual (titular o familiar), con su costo
+// propio. Se detalla en la liquidación mensual a la empresa. Nunca se borra:
+// al quitarlo queda inactivo.
+model PersonService {
+  id            Int      @id @default(autoincrement())
+  serviceTypeId Int
+  affiliateId   Int?     // si es del titular
+  dependentId   Int?     // si es de un familiar
+  amount        Float
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  endedAt       DateTime?
+  serviceType   ServiceType @relation(fields: [serviceTypeId], references: [id])
+  affiliate     Affiliate?  @relation(fields: [affiliateId], references: [id])
+  dependent     Dependent?  @relation(fields: [dependentId], references: [id])
+
+  @@map("person_services")
 }

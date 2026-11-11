@@ -119,6 +119,7 @@ export default function Layout({
         <nav>
           <Link to="/">Resumen</Link>
           <Link to="/afiliados">Asociados</Link>
+          <Link to="/ordenes">Órdenes</Link>
           {canSettings && <Link to="/configuracion">Configuración</Link>}
           {canUsers && <Link to="/usuarios">Usuarios</Link>}
           {canUsers && <Link to="/roles">Roles</Link>}

@@ -67,20 +67,23 @@ export default function Users() {
   async function openPermissions(user: any) {
     setEditingPermissionsFor(user);
     const perms = await api.getUserPermissions(user.id);
-    setPermissions(perms);
+    // "on" = estado final que tendrá la persona (rol + extras − quitados).
+    setPermissions(perms.map((p: any) => ({ ...p, on: (p.fromRole && !p.denied) || p.fromUser })));
   }
 
   function togglePermission(key: string) {
     setPermissions((prev) =>
-      prev.map((p) => (p.key === key ? { ...p, fromUser: !p.fromUser } : p))
+      prev.map((p) => (p.key === key ? { ...p, on: !p.on } : p))
     );
   }
 
   async function savePermissions() {
     setPermissionsSaving(true);
     try {
-      const keys = permissions.filter((p) => p.fromUser).map((p) => p.key);
-      await api.setUserPermissions(editingPermissionsFor.id, keys);
+      // Tildado y el rol no lo da → permiso extra. Destildado y el rol sí lo da → permiso quitado.
+      const keys = permissions.filter((p) => p.on && !p.fromRole).map((p) => p.key);
+      const deny = permissions.filter((p) => !p.on && p.fromRole).map((p) => p.key);
+      await api.setUserPermissions(editingPermissionsFor.id, keys, deny);
       setEditingPermissionsFor(null);
     } catch (err: any) {
       alert(err.message || "No se pudieron guardar los permisos");
@@ -97,25 +100,30 @@ export default function Users() {
         </button>
         <h1>Permisos de {editingPermissionsFor.fullName}</h1>
         <p className="note">
-          Rol actual: {editingPermissionsFor.role}. Lo que marca "Por rol" ya lo tiene por ser
-          ese rol, y no se puede sacar desde acá (cambiá el rol si querés quitárselo). Marcá
-          abajo los permisos extra que querés darle solo a esta persona, además de su rol.
+          Rol actual: {editingPermissionsFor.role}. Los permisos del rol vienen tildados de
+          entrada: destildá los que NO querés que tenga esta persona, o tildá los que quieras
+          sumarle, aunque su rol no los incluya. El cambio vale solo para este usuario (la
+          próxima vez que inicie sesión). El Administrador siempre tiene todo.
         </p>
         <table className="data-table">
-          <thead><tr><th></th><th>Permiso</th><th>Por rol</th></tr></thead>
+          <thead><tr><th></th><th>Permiso</th><th>Estado</th></tr></thead>
           <tbody>
             {permissions.map((p) => (
               <tr key={p.key}>
                 <td>
                   <input
                     type="checkbox"
-                    checked={p.fromRole || p.fromUser}
-                    disabled={p.fromRole}
+                    checked={!!p.on}
+                    disabled={editingPermissionsFor.role === "Administrador"}
                     onChange={() => togglePermission(p.key)}
                   />
                 </td>
                 <td>{translate(permissionLabels, p.key)}</td>
-                <td>{p.fromRole ? <span className="badge badge-active">incluido</span> : "—"}</td>
+                <td>
+                  {p.fromRole && !p.on ? <span className="badge badge-inactive">quitado</span>
+                    : !p.fromRole && p.on ? <span className="badge badge-active">extra</span>
+                    : p.fromRole ? "por rol" : "—"}
+                </td>
               </tr>
             ))}
           </tbody>

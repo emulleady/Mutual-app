@@ -83,7 +83,7 @@ function fmtDni(dni: string | null | undefined): string {
 // Genera la Orden de Compra en PDF: dos cupones en la misma hoja (uno para
 // la Mutual, otro más completo para el Comercio/Socio, con las cláusulas
 // de reconocimiento de deuda), tal cual el formulario en papel.
-export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any) {
+export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any, sealer?: { name: string; role: string } | null) {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
@@ -274,6 +274,20 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any)
   // Se deja más espacio en blanco antes de las líneas de firma (2cm ≈ 57pt)
   // para que se pueda firmar con más comodidad y prolijidad.
   y += 26 + 57;
+
+  // Sello de la Mutual: nombre de quien hizo la orden y, debajo, su cargo.
+  if (sealer && sealer.name) {
+    const sx = 40, sw = 120, sh = 40, sy = y - sh - 6;
+    doc.save();
+    doc.roundedRect(sx, sy, sw, sh, 4).lineWidth(1.2).strokeColor("#1f4a74").stroke();
+    doc.roundedRect(sx + 3, sy + 3, sw - 6, sh - 6, 3).lineWidth(0.5).strokeColor("#1f4a74").stroke();
+    doc.fillColor("#1f4a74").font("Helvetica-Bold").fontSize(9)
+      .text(sealer.name, sx + 5, sy + 9, { width: sw - 10, align: "center", lineBreak: false, ellipsis: true });
+    doc.font("Helvetica").fontSize(8)
+      .text(sealer.role, sx + 5, sy + 24, { width: sw - 10, align: "center", lineBreak: false, ellipsis: true });
+    doc.restore();
+    doc.fillColor("#000000");
+  }
 
   fieldLine(doc, "", "", 35, y, 0, 130);
   fieldLine(doc, "", "", 175, y, 0, 130);

@@ -238,18 +238,23 @@ router.get("/:id/permissions", async (req, res) => {
   ]);
 
   const rolePermIds = new Set(rolePerms.map((p) => p.permissionId));
-  const userPermIds = new Set(userPerms.map((p) => p.permissionId));
+  const userPermIds = new Set(userPerms.filter((p) => p.granted !== false).map((p) => p.permissionId));
+  const deniedIds = new Set(userPerms.filter((p) => p.granted === false).map((p) => p.permissionId));
 
   res.json(
     allPermissions.map((p) => ({
       key: p.key,
       fromRole: rolePermIds.has(p.id),
       fromUser: userPermIds.has(p.id),
+      denied: deniedIds.has(p.id),
     }))
   );
 });
 
-const setPermissionsSchema = z.object({ permissionKeys: z.array(z.string()) });
+const setPermissionsSchema = z.object({
+  permissionKeys: z.array(z.string()), // permisos extra que se le suman
+  denyKeys: z.array(z.string()).optional(), // permisos del rol que se le quitan
+});
 
 // Reemplaza por completo los permisos otorgados DIRECTAMENTE a este
 // usuario (los del rol no se tocan acá, siguen aplicando igual).
@@ -265,9 +270,16 @@ router.post("/:id/permissions", async (req: AuthenticatedRequest, res) => {
     where: { key: { in: parsed.data.permissionKeys } },
   });
 
+  const denied = await prisma.permission.findMany({
+    where: { key: { in: parsed.data.denyKeys || [] } },
+  });
+
   await prisma.userPermission.deleteMany({ where: { userId: id } });
   await prisma.userPermission.createMany({
-    data: permissions.map((p) => ({ userId: id, permissionId: p.id })),
+    data: [
+      ...permissions.map((p) => ({ userId: id, permissionId: p.id, granted: true })),
+      ...denied.map((p) => ({ userId: id, permissionId: p.id, granted: false })),
+    ],
   });
 
   await logAudit({
@@ -275,7 +287,7 @@ router.post("/:id/permissions", async (req: AuthenticatedRequest, res) => {
     action: "update",
     entityType: "user_permissions",
     entityId: id,
-    afterData: { permissionKeys: parsed.data.permissionKeys },
+    afterData: { permissionKeys: parsed.data.permissionKeys, denyKeys: parsed.data.denyKeys || [] },
     ipAddress: req.ip,
   });
 

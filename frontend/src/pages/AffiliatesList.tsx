@@ -22,16 +22,52 @@ export default function AffiliatesList() {
   const [importError, setImportError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"normal" | "altas">("normal");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
+  const [showFilters, setShowFilters] = useState(false);
+  const [filters, setFilters] = useState<Record<string, string>>({});
+  const [options, setOptions] = useState<any>({});
   const navigate = useNavigate();
+
+  const setFilter = (k: string, v: string) => setFilters((f) => ({ ...f, [k]: v }));
+  const activeFilterCount = Object.values(filters).filter((v) => v).length;
 
   function load() {
     api
-      .listAffiliates({ sort: viewMode === "altas" ? "altas" : undefined, status: statusFilter || undefined })
+      .listAffiliates({ ...filters, sort: viewMode === "altas" ? "altas" : undefined, status: statusFilter || undefined })
       .then(setAffiliates)
       .catch(() => {});
   }
 
-  useEffect(load, [viewMode, statusFilter]);
+  // El texto libre espera un momento a que termines de escribir.
+  useEffect(() => {
+    const t = setTimeout(load, 300);
+    return () => clearTimeout(t);
+  }, [viewMode, statusFilter, filters]);
+  useEffect(() => { api.affiliateFilterOptions().then(setOptions).catch(() => {}); }, []);
+
+  function exportCsv() {
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
+    const header = ["N° asociado", "Apellido", "Nombre", "DNI", "CUIL", "Empresa", "Tipo de socio", "Obra social", "Cobertura", "Localidad", "Teléfono", "Email", "Estado"];
+    const rows = affiliates.map((a) => [a.affiliateNumber, a.lastName, a.firstName, a.dni, a.cuil, a.company?.name, a.socioType, a.healthProvider, a.coveragePercentage, a.locality, a.phone, a.email, translate(affiliateStatusLabels, a.status)]);
+    const csv = "\ufeff" + [header, ...rows].map((r) => r.map(esc).join(";")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url; link.download = "asociados-filtrados.csv"; link.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const sel = (key: string, label: string, list: string[] = []) => (
+    <select value={filters[key] || ""} onChange={(e) => setFilter(key, e.target.value)} aria-label={label}>
+      <option value="">{label}</option>
+      {list.map((v) => <option key={v} value={v}>{v}</option>)}
+    </select>
+  );
+  const yesNo = (key: string, label: string) => (
+    <select value={filters[key] || ""} onChange={(e) => setFilter(key, e.target.value)} aria-label={label}>
+      <option value="">{label}</option>
+      <option value="yes">Sí</option>
+      <option value="no">No</option>
+    </select>
+  );
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}); }, []);
 
   async function handleImport(e: React.ChangeEvent<HTMLInputElement>) {
@@ -76,6 +112,9 @@ export default function AffiliatesList() {
             <option value="active">Activos</option>
             <option value="inactive">Inactivos</option>
           </select>
+          <button className="small-button" onClick={() => setShowFilters((v) => !v)}>
+            Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
+          </button>
           <button
             className="small-button"
             onClick={() => setViewMode((v) => (v === "altas" ? "normal" : "altas"))}
@@ -91,6 +130,45 @@ export default function AffiliatesList() {
           </button>
         </div>
       </div>
+
+      {showFilters && (
+        <div className="tab-panel" style={{ marginBottom: 16 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(190px, 1fr))", gap: 8 }}>
+            <input style={{ gridColumn: "span 2" }} placeholder="Buscar: nombre, DNI, CUIL, N°, teléfono, email, domicilio, familiar"
+              value={filters.q || ""} onChange={(e) => setFilter("q", e.target.value)} />
+            <select value={filters.companyId || ""} onChange={(e) => setFilter("companyId", e.target.value)} aria-label="Empresa">
+              <option value="">Empresa</option>
+              {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+            {yesNo("withoutCompany", "¿Sin empresa?")}
+            {sel("socioType", "Tipo de socio", options.socioTypes)}
+            {sel("healthProvider", "Obra social", options.healthProviders)}
+            {sel("coveragePercentage", "Cobertura", options.coverages)}
+            {sel("locality", "Localidad", options.localities)}
+            {sel("province", "Provincia", options.provinces)}
+            {sel("yacimiento", "Yacimiento", options.yacimientos)}
+            {sel("puesto", "Puesto", options.puestos)}
+            {sel("registryStatus", "Estado en planilla", options.registryStatuses)}
+            <select value={filters.branchId || ""} onChange={(e) => setFilter("branchId", e.target.value)} aria-label="Sucursal">
+              <option value="">Sucursal</option>
+              {(options.branches || []).map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            {yesNo("withDependents", "¿Con familiares?")}
+            {yesNo("withPendingOrders", "¿Con órdenes pendientes?")}
+            {yesNo("withMedife", "¿Con cuota Medife?")}
+            <label style={{ fontSize: 12 }}>Alta desde
+              <input type="date" value={filters.altaFrom || ""} onChange={(e) => setFilter("altaFrom", e.target.value)} />
+            </label>
+            <label style={{ fontSize: 12 }}>Alta hasta
+              <input type="date" value={filters.altaTo || ""} onChange={(e) => setFilter("altaTo", e.target.value)} />
+            </label>
+          </div>
+          <div style={{ marginTop: 10, display: "flex", gap: 8 }}>
+            <button className="small-button" onClick={() => setFilters({})}>Limpiar filtros</button>
+            <button className="small-button" onClick={exportCsv}>Exportar lista a Excel (CSV)</button>
+          </div>
+        </div>
+      )}
 
       {importError && <div className="error-box" style={{ marginBottom: 16 }}>{importError}</div>}
 
@@ -143,7 +221,7 @@ export default function AffiliatesList() {
       <table className="data-table">
         <thead>
           <tr>
-            <th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Estado</th>
+            <th>N°</th><th>Apellido y nombre</th><th>DNI</th><th>Empresa</th><th>Tipo de socio</th><th>Obra social</th><th>Estado</th>
             {viewMode === "altas" && <th>Fecha de alta</th>}
           </tr>
         </thead>
@@ -153,6 +231,9 @@ export default function AffiliatesList() {
               <td>{a.affiliateNumber}</td>
               <td>{a.lastName}, {a.firstName}</td>
               <td>{a.dni}</td>
+              <td>{a.company?.name || "—"}</td>
+              <td>{a.socioType || "—"}</td>
+              <td>{a.healthProvider || "—"}</td>
               <td><span className={`badge badge-${a.status}`}>{translate(affiliateStatusLabels, a.status)}</span></td>
               {viewMode === "altas" && (
                 <td>{new Date(a.membershipDate || a.createdAt).toLocaleDateString("es-AR")}</td>

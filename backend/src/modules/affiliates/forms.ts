@@ -188,7 +188,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
     95,
     255
   );
-  fieldLine(doc, "Estado:", estadoLabel, 310, y, 45, 250);
+  fieldLine(doc, "Tipo de Socio:", affiliate.socioType || "Activo", 310, y, 75, 250);
   y += 24;
 
   doc.moveTo(35, y).lineTo(560, y).strokeColor("#333333").lineWidth(1).stroke();

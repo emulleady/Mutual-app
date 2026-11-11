@@ -47,6 +47,7 @@ const affiliateSchema = z.object({
   coveragePercentage: z.string().optional().nullable(),
   socioType: z.string().optional().nullable(),
   feeAmount: z.number().optional().nullable(),
+  medifeFee: z.number().nonnegative().optional().nullable(),
   membershipDate: z.string().datetime().optional().nullable(),
 });
 
@@ -76,13 +77,88 @@ router.get("/search", async (req, res) => {
   res.json(results);
 });
 
-// Listado general (con filtro simple por estado).
+// Valores distintos que existen en los datos, para armar las listas de filtros.
+router.get("/filter-options", async (_req, res) => {
+  const distinct = async (field: string) => {
+    const rows: any[] = await (prisma.affiliate as any).findMany({
+      where: { [field]: { not: null } },
+      distinct: [field],
+      select: { [field]: true },
+      orderBy: { [field]: "asc" },
+    });
+    return rows.map((r) => r[field]).filter((v) => typeof v === "string" && v.trim() !== "");
+  };
+  const [socioTypes, healthProviders, coverages, localities, provinces, yacimientos, puestos, registryStatuses, branches] =
+    await Promise.all([
+      distinct("socioType"), distinct("healthProvider"), distinct("coveragePercentage"), distinct("locality"),
+      distinct("province"), distinct("yacimiento"), distinct("puesto"), distinct("registryStatus"),
+      prisma.branch.findMany({ orderBy: { name: "asc" } }),
+    ]);
+  res.json({ socioTypes, healthProviders, coverages, localities, provinces, yacimientos, puestos, registryStatuses, branches });
+});
+
+// Listado general con filtros combinables sobre todos los datos del asociado.
 router.get("/", async (req, res) => {
-  const status = req.query.status as string | undefined;
-  const sort = req.query.sort as string | undefined;
+  const q = req.query as Record<string, string | undefined>;
+  const sort = q.sort;
+  const and: any[] = [];
+  const eq = (field: string, v?: string) => { if (v) and.push({ [field]: { equals: v, mode: "insensitive" } }); };
+
+  if (q.status) and.push({ status: q.status });
+  if (q.companyId) and.push({ companyId: Number(q.companyId) });
+  if (q.branchId) and.push({ branchId: Number(q.branchId) });
+  eq("socioType", q.socioType);
+  eq("healthProvider", q.healthProvider);
+  eq("coveragePercentage", q.coveragePercentage);
+  eq("locality", q.locality);
+  eq("province", q.province);
+  eq("yacimiento", q.yacimiento);
+  eq("puesto", q.puesto);
+  eq("registryStatus", q.registryStatus);
+
+  // Texto libre: número, nombre, apellido, DNI, CUIL, teléfono, email, domicilio.
+  const text = (q.q || "").trim();
+  if (text) {
+    const words = text.split(/\s+/);
+    for (const w of words) {
+      and.push({
+        OR: [
+          { affiliateNumber: { contains: w } },
+          { firstName: { contains: w, mode: "insensitive" } },
+          { lastName: { contains: w, mode: "insensitive" } },
+          { dni: { contains: w } },
+          { cuil: { contains: w } },
+          { phone: { contains: w } },
+          { email: { contains: w, mode: "insensitive" } },
+          { address: { contains: w, mode: "insensitive" } },
+          { dependents: { some: { OR: [{ fullName: { contains: w, mode: "insensitive" } }, { dni: { contains: w } }] } } },
+        ],
+      });
+    }
+  }
+
+  // Fecha de alta (la de asociación; si no está, la de creación del registro).
+  const parseDay = (v?: string, end = false) => (v ? new Date(`${v}T${end ? "23:59:59" : "00:00:00"}-03:00`) : undefined);
+  const from = parseDay(q.altaFrom), to = parseDay(q.altaTo, true);
+  if (from || to) {
+    const range: any = {};
+    if (from) range.gte = from;
+    if (to) range.lte = to;
+    and.push({ OR: [{ membershipDate: range }, { AND: [{ membershipDate: null }, { createdAt: range }] }] });
+  }
+
+  if (q.withDependents === "yes") and.push({ dependents: { some: { active: true } } });
+  if (q.withDependents === "no") and.push({ dependents: { none: { active: true } } });
+  if (q.withPendingOrders === "yes") and.push({ loans: { some: { status: { in: ["active", "overdue", "pending", "approved"] } } } });
+  if (q.withPendingOrders === "no") and.push({ loans: { none: { status: { in: ["active", "overdue", "pending", "approved"] } } } });
+  if (q.withMedife === "yes") and.push({ medifeFee: { gt: 0 } });
+  if (q.withMedife === "no") and.push({ OR: [{ medifeFee: null }, { medifeFee: 0 }] });
+  if (q.serviceTypeId) and.push({ services: { some: { serviceTypeId: Number(q.serviceTypeId), active: true } } });
+  if (q.withoutCompany === "yes") and.push({ companyId: null });
 
   const affiliates = await prisma.affiliate.findMany({
-    where: status ? { status } : undefined,
+    where: and.length ? { AND: and } : undefined,
+    include: { company: { select: { id: true, name: true } }, branch: { select: { id: true, name: true } } },
     orderBy: sort === "altas" ? undefined : { lastName: "asc" },
   });
 
@@ -110,7 +186,8 @@ router.get("/:id", async (req, res) => {
       events: { orderBy: { occurredAt: "desc" } },
       branch: true,
       company: true,
-      dependents: { orderBy: { fullName: "asc" } },
+      dependents: { orderBy: { fullName: "asc" }, include: { services: { where: { active: true }, include: { serviceType: true } } } },
+      services: { where: { active: true }, include: { serviceType: true } },
       periods: { orderBy: { startDate: "desc" }, include: { company: true } },
     },
   });

@@ -50,9 +50,15 @@ router.post("/login", async (req, res) => {
       include: { permission: true },
     }),
   ]);
+  // Las excepciones por usuario pisan al rol: las "quitadas" (granted=false)
+  // se sacan aunque el rol las tenga.
+  const denied = new Set(userPerms.filter((p) => p.granted === false).map((p) => p.permission.key));
   let permissions = Array.from(
-    new Set([...rolePerms.map((p) => p.permission.key), ...userPerms.map((p) => p.permission.key)])
-  );
+    new Set([
+      ...rolePerms.map((p) => p.permission.key),
+      ...userPerms.filter((p) => p.granted !== false).map((p) => p.permission.key),
+    ])
+  ).filter((k) => !denied.has(k));
   // El Administrador siempre recibe todos los permisos del sistema.
   if (user.role.name === "Administrador") {
     const all = await prisma.permission.findMany();

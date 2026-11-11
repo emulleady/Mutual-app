@@ -69,7 +69,9 @@ export async function userHasPermission(
       where: { userId: user.id, permission: { key: permissionKey } },
     }),
   ]);
-  return !!fromRole || !!fromUser;
+  // Una excepción por usuario manda sobre el rol: si se le quitó, no lo tiene.
+  if (fromUser) return fromUser.granted !== false;
+  return !!fromRole;
 }
 
 // Middleware de autorizacion: exige que el rol del usuario, O un permiso

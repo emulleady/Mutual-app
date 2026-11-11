@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import ServicesEditor from "../components/ServicesEditor";
 import { api } from "../api/client";
 import LoanPanel from "../components/LoanPanel";
 import { affiliateStatusLabels, translate } from "../utils/labels";
@@ -30,6 +31,7 @@ export default function AffiliateProfile() {
   const [editingDepId, setEditingDepId] = useState<number | null>(null);
   const [dependentError, setDependentError] = useState<string | null>(null);
   const [membershipFees, setMembershipFees] = useState<any[]>([]);
+  const [serviceCatalog, setServiceCatalog] = useState<any[]>([]);
 
   function load() {
     if (id) api.getAffiliate(Number(id)).then(setAffiliate).catch(() => {});
@@ -38,6 +40,7 @@ export default function AffiliateProfile() {
   useEffect(load, [id]);
   useEffect(() => { api.listCompanies().then(setCompanies).catch(() => {}); }, []);
   useEffect(() => { api.getMembershipFees().then(setMembershipFees).catch(() => {}); }, []);
+  useEffect(() => { api.getServiceTypes().then((l: any[]) => setServiceCatalog(l.filter((t) => t.active))).catch(() => {}); }, []);
 
   // Al elegir un tipo de socio, se precarga el valor de cuota configurado
   // en Configuración — pero solo si el campo todavía está vacío, para no
@@ -74,6 +77,7 @@ export default function AffiliateProfile() {
       coveragePercentage: affiliate.coveragePercentage || "",
       socioType: affiliate.socioType || "",
       feeAmount: affiliate.feeAmount != null ? String(affiliate.feeAmount) : "",
+      medifeFee: affiliate.medifeFee != null ? String(affiliate.medifeFee) : "",
       membershipDate: (affiliate.membershipDate || affiliate.createdAt)
         ? (affiliate.membershipDate || affiliate.createdAt).slice(0, 10)
         : "",
@@ -92,6 +96,7 @@ export default function AffiliateProfile() {
         membershipDate: form.membershipDate ? new Date(form.membershipDate).toISOString() : null,
         companyId: form.companyId ? Number(form.companyId) : null,
         feeAmount: form.feeAmount ? Number(form.feeAmount) : null,
+        medifeFee: form.medifeFee ? Number(form.medifeFee) : null,
       });
       setEditing(false);
       load();
@@ -311,6 +316,7 @@ export default function AffiliateProfile() {
                 <dt>Dirección</dt><dd>{affiliate.address || "—"} {affiliate.addressNumber ? `N° ${affiliate.addressNumber}` : ""} {affiliate.addressType ? `(${affiliate.addressType})` : ""} {affiliate.floorApt ? `- Piso ${affiliate.floorApt}` : ""}</dd>
                 <dt>Tipo de socio</dt><dd>{affiliate.socioType || "—"}</dd>
                 <dt>Valor de cuota</dt><dd>{affiliate.feeAmount != null ? `$${affiliate.feeAmount.toLocaleString("es-AR")}` : "—"}</dd>
+                <dt>Cuota Medife</dt><dd>{affiliate.medifeFee != null ? `$${affiliate.medifeFee.toLocaleString("es-AR")}` : "—"}</dd>
                 <dt>Localidad</dt><dd>{affiliate.locality || "—"}, {affiliate.province || "—"}</dd>
                 <dt>Teléfono</dt><dd>{affiliate.phone || "—"}</dd>
                 <dt>Email</dt><dd>{affiliate.email || "—"}</dd>
@@ -388,6 +394,8 @@ export default function AffiliateProfile() {
               </select>
               <label>Valor de cuota</label>
               <input type="number" step="0.01" value={form.feeAmount} onChange={(e) => setForm({ ...form, feeAmount: e.target.value })} />
+              <label>Cuota Medife (va en la columna MEDIFE de la liquidación)</label>
+              <input type="number" step="0.01" min="0" value={form.medifeFee ?? ""} onChange={(e) => setForm({ ...form, medifeFee: e.target.value })} />
               {error && <div className="error-box">{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="submit">Guardar cambios</button>
@@ -479,8 +487,13 @@ export default function AffiliateProfile() {
             </form>
           )}
 
+          <div style={{ marginBottom: 16 }}>
+            <h4 style={{ margin: "0 0 6px" }}>Servicios del titular</h4>
+            <ServicesEditor items={affiliate.services || []} catalog={serviceCatalog} affiliateId={affiliate.id} onChanged={load} />
+          </div>
+
           <table className="data-table">
-            <thead><tr><th>N° asociado</th><th>Nombre</th><th>Parentesco</th><th>Tipo de socio</th><th>DNI</th><th>Obra social</th><th>Cobertura</th><th>Estado</th><th></th></tr></thead>
+            <thead><tr><th>N° asociado</th><th>Nombre</th><th>Parentesco</th><th>Tipo de socio</th><th>Servicios</th><th>DNI</th><th>Obra social</th><th>Cobertura</th><th>Estado</th><th></th></tr></thead>
             <tbody>
               {(affiliate.dependents || []).map((d: any) => (
                 <tr key={d.id} style={d.active === false ? { opacity: 0.55 } : undefined}>
@@ -503,6 +516,9 @@ export default function AffiliateProfile() {
                       <option value="No socio">No socio</option>
                     </select>
                   </td>
+                  <td>
+                    <ServicesEditor items={d.services || []} catalog={serviceCatalog} dependentId={d.id} onChanged={load} />
+                  </td>
                   <td>{d.dni || "—"}</td>
                   <td>{d.healthProvider || "—"}</td>
                   <td>{d.coveragePercentage || "—"}</td>
@@ -516,7 +532,7 @@ export default function AffiliateProfile() {
                 </tr>
               ))}
               {(!affiliate.dependents || affiliate.dependents.length === 0) && (
-                <tr><td colSpan={9}>Sin familiares a cargo cargados.</td></tr>
+                <tr><td colSpan={10}>Sin familiares a cargo cargados.</td></tr>
               )}
             </tbody>
           </table>

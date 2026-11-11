@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { useState } from "react";
 import Login from "./pages/Login";
 import Dashboard from "./pages/Dashboard";
+import Orders from "./pages/Orders";
 import AffiliatesList from "./pages/AffiliatesList";
 import AffiliateProfile from "./pages/AffiliateProfile";
 import Settings from "./pages/Settings";
@@ -79,6 +80,7 @@ export default function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/afiliados" element={<AffiliatesList />} />
         <Route path="/afiliados/:id" element={<AffiliateProfile />} />
+        <Route path="/ordenes" element={<Orders />} />
         {canSettings && <Route path="/configuracion" element={<Settings />} />}
         {canUsers && <Route path="/usuarios" element={<Users />} />}
         {canUsers && <Route path="/roles" element={<Roles />} />}

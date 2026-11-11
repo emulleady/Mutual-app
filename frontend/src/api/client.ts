@@ -76,12 +76,18 @@ export const api = {
     request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   dashboard: () => request("/dashboard"),
   searchAffiliates: (q: string) => request(`/affiliates/search?q=${encodeURIComponent(q)}`),
-  listAffiliates: (params?: { sort?: string; status?: string }) => {
+  listAffiliates: (params?: Record<string, string | undefined>) => {
     const qs = new URLSearchParams();
-    if (params?.sort) qs.set("sort", params.sort);
-    if (params?.status) qs.set("status", params.status);
+    Object.entries(params || {}).forEach(([k, v]) => { if (v) qs.set(k, v); });
     const q = qs.toString();
     return request(`/affiliates${q ? `?${q}` : ""}`);
+  },
+  affiliateFilterOptions: () => request("/affiliates/filter-options"),
+  listLoans: (params?: Record<string, string | undefined>) => {
+    const qs = new URLSearchParams();
+    Object.entries(params || {}).forEach(([k, v]) => { if (v) qs.set(k, v); });
+    const q = qs.toString();
+    return request(`/loans${q ? `?${q}` : ""}`);
   },
   searchLoans: (q: string) => request(`/loans/search?q=${encodeURIComponent(q)}`),
   getAffiliate: (id: number) => request(`/affiliates/${id}`),
@@ -113,6 +119,16 @@ export const api = {
   setClosingDay: (closingDay: number | null) =>
     request("/settings/closing-day", { method: "POST", body: JSON.stringify({ closingDay }) }),
   getMembershipFees: () => request("/settings/membership-fees"),
+  getServiceTypes: () => request("/services/types"),
+  createServiceType: (data: { name: string; defaultAmount: number }) =>
+    request("/services/types", { method: "POST", body: JSON.stringify(data) }),
+  updateServiceType: (id: number, data: { name?: string; defaultAmount?: number; active?: boolean }) =>
+    request(`/services/types/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  assignService: (data: { serviceTypeId: number; affiliateId?: number; dependentId?: number; amount: number }) =>
+    request("/services/assign", { method: "POST", body: JSON.stringify(data) }),
+  updatePersonService: (id: number, amount: number) =>
+    request(`/services/assign/${id}`, { method: "PUT", body: JSON.stringify({ amount }) }),
+  removePersonService: (id: number) => request(`/services/assign/${id}`, { method: "DELETE" }),
   setMembershipFee: (socioType: string, feeAmount: number) =>
     request("/settings/membership-fees", { method: "POST", body: JSON.stringify({ socioType, feeAmount }) }),
   listUsers: () => request("/users"),
@@ -129,8 +145,8 @@ export const api = {
   resetUserPassword: (id: number, password: string) =>
     request(`/users/${id}/reset-password`, { method: "POST", body: JSON.stringify({ password }) }),
   getUserPermissions: (id: number) => request(`/users/${id}/permissions`),
-  setUserPermissions: (id: number, permissionKeys: string[]) =>
-    request(`/users/${id}/permissions`, { method: "POST", body: JSON.stringify({ permissionKeys }) }),
+  setUserPermissions: (id: number, permissionKeys: string[], denyKeys: string[] = []) =>
+    request(`/users/${id}/permissions`, { method: "POST", body: JSON.stringify({ permissionKeys, denyKeys }) }),
   listCompanies: () => request("/companies"),
   getCompany: (id: number) => request(`/companies/${id}`),
   createCompany: (data: unknown) => request("/companies", { method: "POST", body: JSON.stringify(data) }),

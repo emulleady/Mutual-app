@@ -45,6 +45,84 @@ async function nextOrderNumber(): Promise<string> {
   return `A-${String(counter).padStart(9, "0")}`;
 }
 
+// Módulo de consulta de órdenes de compra: listado con filtros combinables.
+// Solo lectura (para ver y consultar; no modifica nada).
+router.get("/", async (req, res) => {
+  const q = req.query as Record<string, string | undefined>;
+  const and: any[] = [];
+  const day = (v?: string, end = false) => (v ? new Date(`${v}T${end ? "23:59:59" : "00:00:00"}-03:00`) : undefined);
+
+  const num = (q.orderNumber || "").trim();
+  if (num) and.push({ orderNumber: { contains: num, mode: "insensitive" } });
+  const who = (q.affiliate || "").trim();
+  if (who) {
+    for (const w of who.split(/\s+/)) {
+      and.push({ affiliate: { OR: [
+        { firstName: { contains: w, mode: "insensitive" } },
+        { lastName: { contains: w, mode: "insensitive" } },
+        { dni: { contains: w } },
+        { affiliateNumber: { contains: w } },
+      ] } });
+    }
+  }
+  if (q.companyId) and.push({ affiliate: { companyId: Number(q.companyId) } });
+  if (q.status) and.push({ status: q.status });
+  const comercio = (q.comercio || "").trim();
+  if (comercio) and.push({ loanType: { contains: comercio, mode: "insensitive" } });
+  const gFrom = day(q.dateFrom), gTo = day(q.dateTo, true);
+  if (gFrom || gTo) and.push({ grantedAt: { ...(gFrom ? { gte: gFrom } : {}), ...(gTo ? { lte: gTo } : {}) } });
+  if (q.amountMin) and.push({ amount: { gte: Number(q.amountMin) } });
+  if (q.amountMax) and.push({ amount: { lte: Number(q.amountMax) } });
+  if (q.installments) and.push({ installmentsCount: Number(q.installments) });
+  // Órdenes con cuotas impagas que vencen en un rango.
+  const dFrom = day(q.dueFrom), dTo = day(q.dueTo, true);
+  if (dFrom || dTo) {
+    and.push({ installments: { some: { status: { not: "paid" }, dueDate: { ...(dFrom ? { gte: dFrom } : {}), ...(dTo ? { lte: dTo } : {}) } } } });
+  }
+  if (q.pending === "yes") and.push({ installments: { some: { status: { not: "paid" } } }, status: { not: "cancelled" } });
+  if (q.pending === "no") and.push({ installments: { none: { status: { not: "paid" } } } });
+
+  const limit = 1000;
+  const loans = await prisma.loan.findMany({
+    where: and.length ? { AND: and } : undefined,
+    include: {
+      affiliate: { select: { id: true, firstName: true, lastName: true, affiliateNumber: true, dni: true, company: { select: { id: true, name: true } } } },
+      installments: { select: { number: true, amount: true, paidAmount: true, status: true, dueDate: true }, orderBy: { number: "asc" } },
+    },
+    orderBy: { grantedAt: "desc" },
+    take: limit + 1,
+  });
+  const truncated = loans.length > limit;
+  const rows = loans.slice(0, limit).map((l) => {
+    const paid = l.installments.filter((i) => i.status === "paid").length;
+    const balance = l.status === "cancelled" ? 0 : l.installments.reduce((s, i) => s + Math.max(0, i.amount - i.paidAmount), 0);
+    const nextDue = l.installments.find((i) => i.status !== "paid");
+    return {
+      id: l.id,
+      orderNumber: l.orderNumber,
+      comercio: l.loanType,
+      grantedAt: l.grantedAt,
+      amount: l.amount,
+      installmentsCount: l.installmentsCount,
+      installmentValue: l.installmentValue,
+      status: l.status,
+      paidCount: paid,
+      balance: Number(balance.toFixed(2)),
+      nextDueDate: nextDue?.dueDate ?? null,
+      affiliate: l.affiliate,
+    };
+  });
+  res.json({
+    rows,
+    truncated,
+    totals: {
+      count: rows.length,
+      amount: Number(rows.reduce((s, r) => s + r.amount, 0).toFixed(2)),
+      balance: Number(rows.reduce((s, r) => s + r.balance, 0).toFixed(2)),
+    },
+  });
+});
+
 // Buscar ordenes de compra por numero (ej. "1166" encuentra "A-000001166").
 router.get("/search", async (req, res) => {
   const q = String(req.query.q || "").trim();
@@ -284,7 +362,14 @@ router.get("/:id/forms/orden-compra", async (req, res) => {
   });
   if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
 
-  generateOrdenCompraPdf(res, loan, loan.affiliate);
+  // Sello con quien cargó la orden (nombre y cargo/rol).
+  let sealer: { name: string; role: string } | null = null;
+  if (loan.createdByUserId) {
+    const u = await prisma.user.findUnique({ where: { id: loan.createdByUserId }, include: { role: true } });
+    if (u) sealer = { name: u.fullName, role: u.role?.name || "" };
+  }
+
+  generateOrdenCompraPdf(res, loan, loan.affiliate, sealer);
 });
 
 // Corregir la fecha y/o el numero de una orden ya cargada (por ejemplo
