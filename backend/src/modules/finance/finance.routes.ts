@@ -421,6 +421,41 @@ router.get("/collections/summary", async (req, res) => {
   res.json({ month, rows, total });
 });
 
+// Revisión de vencimientos: cuotas de órdenes de compra que siguen impagas y
+// vencen hasta el fin del mes elegido (lo que la empresa no descontó o todavía
+// no se cobró), agrupables por empresa. Sirve para controlar después de cargar
+// una cobranza.
+router.get("/collections/overdue", async (req, res) => {
+  const month = String(req.query.month || "");
+  const range = parseMonth(month);
+  if (!range) return res.status(400).json({ error: "Mes inválido (AAAA-MM)" });
+  const now = new Date();
+  const rows = await prisma.loanInstallment.findMany({
+    where: {
+      status: { not: "paid" },
+      dueDate: { lt: range.end },
+      loan: { status: { in: ["active", "overdue", "pending", "approved"] }, affiliate: { status: "active" } },
+    },
+    include: { loan: { include: { affiliate: { select: { id: true, firstName: true, lastName: true, affiliateNumber: true, company: { select: { id: true, name: true } } } } } } },
+    orderBy: [{ dueDate: "asc" }],
+    take: 1000,
+  });
+  const out = rows.map((i: any) => ({
+    installmentId: i.id,
+    companyName: i.loan.affiliate.company?.name || "Sin empresa",
+    affiliateId: i.loan.affiliate.id,
+    affiliate: `${i.loan.affiliate.lastName}, ${i.loan.affiliate.firstName}`,
+    affiliateNumber: i.loan.affiliate.affiliateNumber,
+    orderNumber: i.loan.orderNumber,
+    installment: `${i.number}/${i.loan.installmentsCount}`,
+    dueDate: i.dueDate,
+    balance: round2(i.amount - i.paidAmount),
+    daysOverdue: Math.max(0, Math.floor((now.getTime() - i.dueDate.getTime()) / 86_400_000)),
+  }));
+  out.sort((a: any, b: any) => a.companyName.localeCompare(b.companyName) || a.dueDate - b.dueDate);
+  res.json({ month, rows: out, total: round2(out.reduce((s: number, r: any) => s + r.balance, 0)) });
+});
+
 router.get("/collections", async (req, res) => {
   const where: any = {};
   if (req.query.month) where.month = String(req.query.month);
@@ -540,6 +575,13 @@ router.post("/collections", async (req: AuthenticatedRequest, res) => {
         const remaining = await tx.loanInstallment.count({ where: { loanId, status: { not: "paid" } } });
         if (remaining === 0) {
           await tx.loan.update({ where: { id: loanId }, data: { status: "cancelled", cancelledAt: new Date(), cancellationReason: "Saldado" } });
+        } else {
+          // Si ya no le quedan cuotas vencidas, la orden deja de figurar en mora.
+          const stillOverdue = await tx.loanInstallment.count({ where: { loanId, status: "overdue" } });
+          const loan = await tx.loan.findUnique({ where: { id: loanId } });
+          if (stillOverdue === 0 && loan?.status === "overdue") {
+            await tx.loan.update({ where: { id: loanId }, data: { status: "active" } });
+          }
         }
       }
       return payment;
@@ -602,7 +644,8 @@ router.post("/collections/:id/void", async (req: AuthenticatedRequest, res) => {
           const newPaid = Math.max(0, round2(inst.paidAmount - link.amount));
           await tx.loanInstallment.update({
             where: { id: inst.id },
-            data: { paidAmount: newPaid, status: newPaid >= inst.amount ? "paid" : "pending", paidAt: newPaid >= inst.amount ? inst.paidAt : null },
+            // Al anular, una cuota que ya venció vuelve como vencida (no como pendiente).
+            data: { paidAmount: newPaid, status: newPaid >= inst.amount ? "paid" : inst.dueDate < new Date() ? "overdue" : "pending", paidAt: newPaid >= inst.amount ? inst.paidAt : null },
           });
           touchedLoans.add(inst.loanId);
         }

@@ -167,6 +167,7 @@ model Dependent {
   deactivatedWithTitular Boolean @default(false) // se desactivo junto con el titular (se reactiva con el)
   socioType      String?  // Adherente | Participante | Socio Deportivo | ... (define la cuota social)
   feeAmount      Float?   // si se carga, pisa el valor de cuota del tipo de socio
+  medifeFee      Float?   // cuota de Medife de este familiar (va en la liquidación a la empresa)
   birthDate      DateTime?
   healthProvider     String?
   coveragePercentage String?

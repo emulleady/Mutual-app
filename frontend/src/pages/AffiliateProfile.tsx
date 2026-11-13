@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
+import { hasPermission } from "../utils/permissions";
 import ServicesEditor from "../components/ServicesEditor";
 import { api } from "../api/client";
 import LoanPanel from "../components/LoanPanel";
@@ -8,7 +9,7 @@ import { affiliateStatusLabels, translate } from "../utils/labels";
 type Tab = "resumen" | "datos" | "prestamos" | "familiares" | "historial";
 
 const EMPTY_DEP_FORM = {
-  fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", birthDate: "",
+  fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", medifeFee: "", birthDate: "",
   address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
 };
 
@@ -25,7 +26,7 @@ export default function AffiliateProfile() {
   const [companies, setCompanies] = useState<any[]>([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
   const [dependentForm, setDependentForm] = useState({
-    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", birthDate: "",
+    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", medifeFee: "", birthDate: "",
     address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
   });
   const [editingDepId, setEditingDepId] = useState<number | null>(null);
@@ -165,6 +166,7 @@ export default function AffiliateProfile() {
         dependentNumber: dependentForm.dependentNumber || null,
         parentesco,
         socioType: dependentForm.socioType || null,
+        medifeFee: dependentForm.medifeFee ? Number(dependentForm.medifeFee) : null,
         birthDate: dependentForm.birthDate ? new Date(dependentForm.birthDate).toISOString() : null,
         address: dependentForm.address || null,
         addressNumber: dependentForm.addressNumber || null,
@@ -197,6 +199,7 @@ export default function AffiliateProfile() {
       parentesco: isKnown ? d.parentesco : "Otro",
       parentescoOtro: isKnown ? "" : d.parentesco || "",
       socioType: d.socioType || "",
+      medifeFee: d.medifeFee != null ? String(d.medifeFee) : "",
       birthDate: d.birthDate ? String(d.birthDate).slice(0, 10) : "",
       address: d.address || "",
       addressNumber: d.addressNumber || "",
@@ -248,7 +251,7 @@ export default function AffiliateProfile() {
       <div className="tabs">
         <button className={tab === "resumen" ? "active" : ""} onClick={() => setTab("resumen")}>Resumen</button>
         <button className={tab === "datos" ? "active" : ""} onClick={() => setTab("datos")}>Datos personales</button>
-        <button className={tab === "prestamos" ? "active" : ""} onClick={() => setTab("prestamos")}>Órdenes de compra</button>
+        {hasPermission("orders.view") && <button className={tab === "prestamos" ? "active" : ""} onClick={() => setTab("prestamos")}>Órdenes de compra</button>}
         <button className={tab === "familiares" ? "active" : ""} onClick={() => setTab("familiares")}>Familiares</button>
         <button className={tab === "historial" ? "active" : ""} onClick={() => setTab("historial")}>Historial</button>
       </div>
@@ -406,7 +409,7 @@ export default function AffiliateProfile() {
         </div>
       )}
 
-      {tab === "prestamos" && (
+      {tab === "prestamos" && hasPermission("orders.view") && (
         <div className="tab-panel">
           <LoanPanel affiliateId={affiliate.id} />
         </div>
@@ -458,6 +461,8 @@ export default function AffiliateProfile() {
                 <option value="Socio Deportivo">Socio Deportivo</option>
                 <option value="No socio">No socio</option>
               </select>
+              <input type="number" step="0.01" min="0" placeholder="Cuota Medife (si corresponde)" value={dependentForm.medifeFee}
+                onChange={(e) => setDependentForm({ ...dependentForm, medifeFee: e.target.value })} />
               <input type="date" value={dependentForm.birthDate}
                 onChange={(e) => setDependentForm({ ...dependentForm, birthDate: e.target.value })} />
               <input placeholder="CUIL" value={dependentForm.cuil}

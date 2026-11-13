@@ -7,6 +7,7 @@ import dashboardRoutes from "./modules/affiliates/dashboard.routes";
 import loansRoutes from "./modules/loans/loans.routes";
 import settingsRoutes from "./modules/settings/settings.routes";
 import servicesRoutes from "./modules/services/services.routes";
+import { ensurePermissionsExist } from "./modules/users/permissionCatalog";
 import usersRoutes from "./modules/users/users.routes";
 import companiesRoutes from "./modules/companies/companies.routes";
 import auditRoutes from "./modules/audit/audit.routes";
@@ -40,6 +41,8 @@ app.use("/api/finance", financeRoutes);
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 const port = process.env.PORT || 4000;
+ensurePermissionsExist().catch((e) => console.error("No se pudieron crear los permisos:", e));
+
 app.listen(port, () => {
   console.log(`API escuchando en http://localhost:${port}`);
 });

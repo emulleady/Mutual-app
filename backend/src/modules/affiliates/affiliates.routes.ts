@@ -479,6 +479,7 @@ const dependentSchema = z.object({
   parentesco: z.string().min(1),
   socioType: z.string().optional().nullable(),
   feeAmount: z.number().nonnegative().optional().nullable(),
+  medifeFee: z.number().nonnegative().optional().nullable(),
   birthDate: z.string().datetime().optional().nullable(),
   healthProvider: z.string().optional().nullable(),
   coveragePercentage: z.string().optional().nullable(),
@@ -505,7 +506,7 @@ router.put("/:id/dependents/:depId", requirePermission("affiliates.edit"), async
 
   const d = parsed.data;
   const data: any = {};
-  const copy = ["fullName","dni","cuil","dependentNumber","parentesco","socioType","feeAmount","healthProvider","coveragePercentage",
+  const copy = ["fullName","dni","cuil","dependentNumber","parentesco","socioType","feeAmount","medifeFee","healthProvider","coveragePercentage",
     "address","addressNumber","addressType","floorApt","locality","province","phone"] as const;
   for (const k of copy) if ((d as any)[k] !== undefined) data[k] = (d as any)[k] === "" ? null : (d as any)[k];
   if (d.email !== undefined) data.email = d.email || null;
@@ -559,6 +560,7 @@ router.post("/:id/dependents", requirePermission("affiliates.edit"), async (req:
       parentesco: data.parentesco,
       socioType: data.socioType || null,
       feeAmount: data.feeAmount ?? null,
+      medifeFee: data.medifeFee ?? null,
       birthDate: data.birthDate ? new Date(data.birthDate) : null,
       healthProvider: data.healthProvider ?? null,
       coveragePercentage: data.coveragePercentage ?? null,

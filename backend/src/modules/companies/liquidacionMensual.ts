@@ -23,8 +23,10 @@ const MUTED = "FFB9D2E8";
 
 const MONEY_FORMAT = '"$" #,##0.00';
 const DATE_FORMAT = "dd/mm/yyyy";
-const TOTAL_COL = 10; // columna J: total a descontar
-const LAST_COL = 12; // columnas A..L (K = MEDIFE, L = SUELDO)
+const TOTAL_COL = 9; // columna I: total a descontar
+const SUELDO_COL = 11; // K: la empresa completa el sueldo
+const PCT_COL = 12; // L: 1% del sueldo (fórmula)
+const LAST_COL = 12; // columnas A..L (J = MEDIFE, K = SUELDO, L = 1% SUELDO)
 
 export function parseMonth(month: string): { start: Date; end: Date; year: number; monthIndex: number } | null {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
@@ -50,7 +52,7 @@ const thin = (argb: string): Partial<ExcelJS.Border> => ({ style: "thin", color:
 // compra que vencen en el mes elegido y todavía están impagas, de los
 // asociados activos de esa empresa. Sin mora (la empresa descuenta la cuota
 // tal cual del recibo de haberes).
-export type LiquidacionLine = { detalle: string; fecha: Date | null; orden: string; cuota: string; vence: Date | null; monto: number; installmentId?: number };
+export type LiquidacionLine = { detalle: string; fecha: Date | null; orden: string; cuota: string; vence: Date | null; monto: number; medife?: number; installmentId?: number };
 export type LiquidacionPerson = { number: string; name: string; dni: string; medife: number | null; subtotal: number; lines: LiquidacionLine[] };
 
 // Calcula (sin armar el Excel) lo que hay que descontar a una empresa en un
@@ -123,24 +125,26 @@ export async function computeLiquidacionData(companyId: number, month: string) {
     // Cuota social de cada familiar activo (adherente, participante...).
     for (const d of a.dependents) {
       if (d.registryStatus && d.registryStatus.toUpperCase().includes("BAJA")) continue;
-      if (!d.socioType) {
-        review.push({ number: a.affiliateNumber, name: titularName, who: `Familiar ${d.fullName}`, reason: "Falta asignarle el tipo de socio (Adherente, Participante…) en la pestaña Familiares" });
-        withoutFee++;
-        continue;
-      }
-      if (d.socioType.toLowerCase() === "no socio") continue;
+      // Todos los familiares activos se liquidan con cuota social: si no tienen
+      // tipo cargado se toman como Participante (paga según el tipo de su titular).
+      const socioType = (d.socioType && d.socioType.trim()) || "Participante";
+      if (socioType.toLowerCase() === "no socio") continue;
       // El Participante paga según el tipo de su titular: "Participante Activo"
       // o "Participante Adherente" (valores en Configuración). Si no existe ese
       // valor, se usa el de "Participante" a secas.
-      const isParticipante = d.socioType.trim().toLowerCase() === "participante";
-      let fee = feeFor(d.feeAmount, isParticipante ? `Participante ${titularType}` : d.socioType);
-      if (isParticipante && fee <= 0) fee = feeFor(d.feeAmount, d.socioType);
+      // Lo mismo para el Adherente: si el titular es Socio Deportivo puede tener
+      // un valor propio ("Adherente Socio Deportivo"); si no, vale el de "Adherente".
+      const tipoLower = socioType.trim().toLowerCase();
+      const isParticipante = tipoLower === "participante";
+      const dependsOnTitular = isParticipante || tipoLower === "adherente";
+      let fee = feeFor(d.feeAmount, dependsOnTitular ? `${socioType.trim()} ${titularType}` : socioType);
+      if (dependsOnTitular && fee <= 0) fee = feeFor(d.feeAmount, socioType);
       if (fee > 0) {
-        lines.push({ detalle: `Cuota social - ${isParticipante ? `Participante (titular ${titularType})` : d.socioType}: ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(fee.toFixed(2)) });
+        lines.push({ detalle: `Cuota social - ${dependsOnTitular && titularType !== socioType.trim() ? `${socioType} (titular ${titularType})` : socioType}: ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(fee.toFixed(2)) });
         feeTotal += fee;
       } else {
         withoutFee++;
-        review.push({ number: a.affiliateNumber, name: titularName, who: `Familiar ${d.fullName}`, reason: `No hay valor de cuota para el tipo de socio "${d.socioType}"` });
+        review.push({ number: a.affiliateNumber, name: titularName, who: `Familiar ${d.fullName}`, reason: `No hay valor de cuota para el tipo de socio "${socioType}"` });
       }
     }
 
@@ -158,6 +162,18 @@ export async function computeLiquidacionData(companyId: number, month: string) {
         lines.push({ detalle: `Servicio - ${s.serviceType?.name || "Servicio"}: ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: Number(s.amount.toFixed(2)) });
         serviceTotal += s.amount;
       }
+    }
+
+    // Medife: el titular y cada familiar activo con cuota Medife cargada. Va en
+    // la columna MEDIFE y se suma al total a descontar.
+    const titularMedife = Number((a as any).medifeFee || 0);
+    if (titularMedife > 0) {
+      lines.push({ detalle: "Medife - Titular", fecha: null, orden: "", cuota: "", vence: null, monto: 0, medife: Number(titularMedife.toFixed(2)) });
+    }
+    for (const d of a.dependents) {
+      if (d.registryStatus && d.registryStatus.toUpperCase().includes("BAJA")) continue;
+      const m = Number((d as any).medifeFee || 0);
+      if (m > 0) lines.push({ detalle: `Medife - ${d.fullName}`, fecha: null, orden: "", cuota: "", vence: null, monto: 0, medife: Number(m.toFixed(2)) });
     }
 
     for (const loan of a.loans) {
@@ -179,8 +195,8 @@ export async function computeLiquidacionData(companyId: number, month: string) {
       number: a.affiliateNumber,
       name: `${a.lastName}, ${a.firstName}`.toUpperCase(),
       dni: a.dni,
-      medife: (a as any).medifeFee ?? null,
-      subtotal: Number(lines.reduce((sum, l) => sum + l.monto, 0).toFixed(2)),
+      medife: null,
+      subtotal: Number(lines.reduce((sum, l) => sum + l.monto + (l.medife || 0), 0).toFixed(2)),
       lines,
     });
   }
@@ -218,8 +234,8 @@ export async function buildCompanyMonthlyLiquidacion(
 
   ws.columns = [
     { width: 14 }, { width: 34 }, { width: 13 }, { width: 42 }, { width: 13 }, { width: 14 },
-    { width: 9 }, { width: 14 }, { width: 16 }, { width: 22 },
-    { width: 16 }, { width: 18 },
+    { width: 9 }, { width: 16 }, { width: 22 },
+    { width: 16 }, { width: 18 }, { width: 18 },
   ];
 
   // Banda de encabezado (filas 1 a 4) sobre fondo azul.
@@ -281,7 +297,7 @@ export async function buildCompanyMonthlyLiquidacion(
   // Encabezado de la tabla (fila 8).
   const headers = [
     "N.º ASOCIADO", "APELLIDO Y NOMBRE", "D.N.I.", "DETALLE", "FECHA ORDEN", "N.º DE ORDEN",
-    "CUOTA", "VENCIMIENTO", "MONTO CUOTA", "TOTAL A DESCONTAR", "MEDIFE", "SUELDO",
+    "CUOTA", "MONTO CUOTA", "TOTAL A DESCONTAR", "MEDIFE", "SUELDO", "1% DEL SUELDO",
   ];
   const headerRow = ws.getRow(8);
   headerRow.height = 30;
@@ -295,13 +311,14 @@ export async function buildCompanyMonthlyLiquidacion(
   });
 
   // Filas de datos, con un color de fondo alternado por asociado.
+  const firstDataRow = 9;
   let row = 9;
   people.forEach((p, personIdx) => {
     const band = personIdx % 2 === 0 ? WHITE : SKY_SOFT;
     p.lines.forEach((l, idx) => {
       const r = ws.getRow(row);
       r.height = 18;
-      const values: (string | number | Date | null)[] = [
+      const values: (string | number | Date | null | { formula: string; result: any })[] = [
         idx === 0 ? p.number : null,
         idx === 0 ? p.name : null,
         idx === 0 ? p.dni : null,
@@ -309,25 +326,25 @@ export async function buildCompanyMonthlyLiquidacion(
         l.fecha,
         l.orden,
         l.cuota,
-        l.vence,
-        l.monto,
+        l.medife ? null : l.monto,
         idx === 0 ? p.subtotal : null,
-        idx === 0 ? p.medife : null, // MEDIFE
+        l.medife ?? null, // MEDIFE (titular y familiares)
         null, // SUELDO: lo completa la empresa
+        idx === 0 ? { formula: `IF(K${row}="","",ROUND(K${row}*0.01,2))`, result: "" } : null, // 1% del sueldo
       ];
       values.forEach((value, i) => {
         const cell = r.getCell(i + 1);
         cell.value = value as ExcelJS.CellValue;
-        cell.fill = fill(i === TOTAL_COL - 1 && idx === 0 ? ORANGE_SOFT : i === 11 ? "FFFFF9E5" : band);
+        cell.fill = fill(i === TOTAL_COL - 1 && idx === 0 ? ORANGE_SOFT : i === SUELDO_COL - 1 ? "FFFFF9E5" : band);
         cell.font = { name: "Calibri", size: 10, color: { argb: INK }, bold: idx === 0 && (i === 1 || i === TOTAL_COL - 1) };
         cell.border = {
           top: idx === 0 ? thin("FF9DB4CC") : undefined,
           bottom: thin("FFD5E1EC"),
         };
-        if (i === 4 || i === 7) {
+        if (i === 4) {
           cell.numFmt = DATE_FORMAT;
           cell.alignment = { horizontal: "center", vertical: "middle" };
-        } else if (i === 8 || i === 9 || i === 10 || i === 11) {
+        } else if (i >= 7) {
           cell.numFmt = MONEY_FORMAT;
           cell.alignment = { horizontal: "right", vertical: "middle" };
         } else if (i === 1 || i === 3) {
@@ -359,6 +376,8 @@ export async function buildCompanyMonthlyLiquidacion(
   totalLabel.font = { name: "Calibri", size: 13, bold: true, color: { argb: WHITE } };
   totalLabel.alignment = { horizontal: "right", vertical: "middle", indent: 1 };
   for (let c = 1; c <= LAST_COL; c++) ws.getCell(row, c).fill = fill(NAVY);
+  const lastDataRow = row - 2; // la fila anterior a la de total quedó en blanco
+  const totalRow = row;
   const totalCell = ws.getCell(row, TOTAL_COL);
   totalCell.value = grandTotal;
   totalCell.numFmt = MONEY_FORMAT;
@@ -366,11 +385,40 @@ export async function buildCompanyMonthlyLiquidacion(
   totalCell.fill = fill(ORANGE);
   totalCell.alignment = { horizontal: "right", vertical: "middle" };
 
+  // Suma de todos los sueldos que cargue la empresa y de sus 1% (fórmulas vivas).
+  const sumCell = (col: number, label?: string) => {
+    const c = ws.getCell(totalRow, col);
+    const letter = ws.getColumn(col).letter;
+    c.value = { formula: `SUM(${letter}${firstDataRow}:${letter}${Math.max(lastDataRow, firstDataRow)})`, result: 0 };
+    c.numFmt = MONEY_FORMAT;
+    c.font = { name: "Calibri", size: 12, bold: true, color: { argb: WHITE } };
+    c.alignment = { horizontal: "right", vertical: "middle" };
+    return c;
+  };
+  sumCell(SUELDO_COL);
+  sumCell(PCT_COL);
+
+  // Última fila: total a descontar + 1% de los sueldos.
+  row++;
+  ws.getRow(row).height = 28;
+  ws.mergeCells(row, 1, row, TOTAL_COL - 1);
+  const finalLabel = ws.getCell(row, 1);
+  finalLabel.value = "TOTAL A DESCONTAR + 1% DE LOS SUELDOS";
+  finalLabel.font = { name: "Calibri", size: 13, bold: true, color: { argb: WHITE } };
+  finalLabel.alignment = { horizontal: "right", vertical: "middle", indent: 1 };
+  for (let c = 1; c <= LAST_COL; c++) ws.getCell(row, c).fill = fill(NAVY);
+  const finalCell = ws.getCell(row, TOTAL_COL);
+  finalCell.value = { formula: `${ws.getColumn(TOTAL_COL).letter}${totalRow}+N(${ws.getColumn(PCT_COL).letter}${totalRow})`, result: grandTotal };
+  finalCell.numFmt = MONEY_FORMAT;
+  finalCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: WHITE } };
+  finalCell.fill = fill(ORANGE);
+  finalCell.alignment = { horizontal: "right", vertical: "middle" };
+
   row++;
   ws.mergeCells(row, 1, row, LAST_COL);
   const summary = ws.getCell(row, 1);
   summary.value =
-    `${people.length} asociado(s) · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·${serviceTotal > 0 ? ` servicios $${serviceTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·` : ""} ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
+    `${people.length} asociado(s) · medife incluido · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·${serviceTotal > 0 ? ` servicios $${serviceTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·` : ""} ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
     (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin cuota social: ver la hoja REVISAR` : "");
   summary.font = { name: "Calibri", size: 9, italic: true, color: { argb: "FF5B7A99" } };
   summary.alignment = { horizontal: "right", vertical: "middle" };

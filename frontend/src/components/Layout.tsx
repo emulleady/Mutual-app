@@ -1,4 +1,5 @@
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { hasPermission } from "../utils/permissions";
 import { useState } from "react";
 import { api } from "../api/client";
 
@@ -28,6 +29,7 @@ export default function Layout({
   canOrders?: boolean;
 }) {
   const navigate = useNavigate();
+  const location = useLocation();
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<any[]>([]);
   const [orderResults, setOrderResults] = useState<any[]>([]);
@@ -38,7 +40,7 @@ export default function Layout({
     if (!query.trim()) return;
     const [found, orders] = await Promise.all([
       api.searchAffiliates(query).catch(() => []),
-      api.searchLoans(query).catch(() => []),
+      (hasPermission("orders.view") ? api.searchLoans(query) : Promise.resolve([])).catch(() => []),
     ]);
     setResults(found);
     setOrderResults(orders);
@@ -175,7 +177,14 @@ export default function Layout({
         )}
       </aside>
 
-      <main className="content">{children}</main>
+      <main className="content">
+        {location.pathname !== "/" && (
+          <button className="link-button-dark" style={{ marginBottom: 12 }} onClick={() => navigate(-1)} title="Volver a la pantalla anterior">
+            ← Atrás
+          </button>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

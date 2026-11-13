@@ -198,6 +198,7 @@ export const api = {
     downloadFile(`/finance/export?from=${from}&to=${to}`, `caja-${from}-a-${to}.xlsx`),
   collectionPreview: (companyId: number, month: string) =>
     request(`/finance/collections/preview?companyId=${companyId}&month=${month}`),
+  collectionsOverdue: (month: string) => request(`/finance/collections/overdue?month=${month}`),
   collectionsSummary: (month: string) => request(`/finance/collections/summary?month=${month}`),
   listCollections: (month: string) => request(`/finance/collections?month=${month}`),
   createCollection: (data: unknown) => request("/finance/collections", { method: "POST", body: JSON.stringify(data) }),

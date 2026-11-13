@@ -124,7 +124,7 @@ router.get("/", requirePermission("orders.view"), async (req, res) => {
 });
 
 // Buscar ordenes de compra por numero (ej. "1166" encuentra "A-000001166").
-router.get("/search", async (req, res) => {
+router.get("/search", requirePermission("orders.view"), async (req, res) => {
   const q = String(req.query.q || "").trim();
   if (q.length === 0) return res.json([]);
   const loans = await prisma.loan.findMany({
@@ -147,7 +147,7 @@ router.get("/search", async (req, res) => {
 });
 
 // Prestamos activos e historicos de un afiliado (misma tabla, distinto status).
-router.get("/affiliate/:affiliateId", async (req, res) => {
+router.get("/affiliate/:affiliateId", requirePermission("orders.view"), async (req, res) => {
   const affiliateId = Number(req.params.affiliateId);
   const loans = await prisma.loan.findMany({
     where: { affiliateId },
@@ -195,7 +195,7 @@ router.get("/affiliate/:affiliateId", async (req, res) => {
 });
 
 // Detalle de un prestamo con sus cuotas (y mora recalculada al consultar).
-router.get("/:id", async (req, res) => {
+router.get("/:id", requirePermission("orders.view"), async (req, res) => {
   const id = Number(req.params.id);
   await recalculateOverdueInstallments(id);
 
@@ -351,7 +351,7 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
 });
 
 // Descarga la Orden de Compra en PDF, lista para que firme el afiliado.
-router.get("/:id/forms/orden-compra", async (req, res) => {
+router.get("/:id/forms/orden-compra", requirePermission("orders.view"), async (req, res) => {
   const id = Number(req.params.id);
   const loan = await prisma.loan.findUnique({
     where: { id },

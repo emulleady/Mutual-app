@@ -30,7 +30,17 @@ export async function ensurePermissionsExist(): Promise<void> {
   const have = new Set(existing.map((p: any) => p.key));
   for (const key of ALL_PERMISSION_KEYS) {
     if (!have.has(key)) {
-      await prisma.permission.create({ data: { key } });
+      const created = await prisma.permission.create({ data: { key } });
+      // "Ver órdenes de compra" es nuevo: para que los roles existentes sigan
+      // viendo lo que veían, se les otorga al crearse. Se exceptúan los roles
+      // de Farmacia, que no deben ver órdenes de compra.
+      if (key === "orders.view") {
+        const roles = await prisma.role.findMany();
+        for (const role of roles) {
+          if (/farmacia/i.test(role.name)) continue;
+          await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: created.id } });
+        }
+      }
     }
   }
 }

@@ -2,7 +2,7 @@ import { can } from "../utils/permissions";
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 
-const SOCIO_TYPES = ["Activo", "Adherente", "Participante Activo", "Participante Adherente", "Socio Deportivo", "Honorario"];
+const SOCIO_TYPES = ["Activo", "Adherente", "Participante Activo", "Participante Adherente", "Participante Socio Deportivo", "Adherente Socio Deportivo", "Socio Deportivo", "Honorario"];
 
 export default function Settings() {
   const readOnly = !can("settings.manage");

@@ -15,6 +15,7 @@ export default function Collections() {
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<any | null>(null);
   const [list, setList] = useState<any[]>([]);
+  const [overdue, setOverdue] = useState<any | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
 
@@ -29,6 +30,7 @@ export default function Collections() {
   function load() {
     api.collectionsSummary(month).then(setSummary).catch(() => setSummary(null));
     api.listCollections(month).then(setList).catch(() => setList([]));
+    api.collectionsOverdue(month).then(setOverdue).catch(() => setOverdue(null));
   }
   useEffect(load, [month]);
   useEffect(() => {
@@ -211,6 +213,34 @@ export default function Collections() {
               <td>{money(summary.total.remaining)}</td>
               <td></td>
             </tr>
+          )}
+        </tbody>
+      </table>
+
+      <h3>Revisar vencimientos: cuotas vencidas sin cobrar</h3>
+      <p className="note">
+        Cuotas de órdenes de compra que siguen impagas y vencen hasta fin de {month}. Después de registrar una
+        cobranza, lo que quede acá es lo que la empresa no descontó (o todavía no cobraste).
+      </p>
+      <table className="data-table" style={{ marginBottom: 24 }}>
+        <thead>
+          <tr><th>Empresa</th><th>Asociado</th><th>Orden</th><th>Cuota</th><th>Vencía</th><th>Días vencida</th><th>Saldo</th></tr>
+        </thead>
+        <tbody>
+          {(overdue?.rows || []).map((r: any) => (
+            <tr key={r.installmentId}>
+              <td>{r.companyName}</td>
+              <td>{r.affiliate}<br /><small>{r.affiliateNumber}</small></td>
+              <td>{r.orderNumber || "—"}</td>
+              <td>{r.installment}</td>
+              <td>{new Date(r.dueDate).toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" })}</td>
+              <td>{r.daysOverdue}</td>
+              <td>{money(r.balance)}</td>
+            </tr>
+          ))}
+          {overdue && overdue.rows.length === 0 && <tr><td colSpan={7}>No hay cuotas vencidas sin cobrar hasta {month}.</td></tr>}
+          {overdue && overdue.rows.length > 0 && (
+            <tr style={{ fontWeight: 700 }}><td colSpan={6}>Total sin cobrar</td><td>{money(overdue.total)}</td></tr>
           )}
         </tbody>
       </table>
