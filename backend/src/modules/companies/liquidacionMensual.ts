@@ -26,7 +26,8 @@ const DATE_FORMAT = "dd/mm/yyyy";
 const TOTAL_COL = 9; // columna I: total a descontar
 const SUELDO_COL = 11; // K: la empresa completa el sueldo
 const PCT_COL = 12; // L: 1% del sueldo (fórmula)
-const LAST_COL = 12; // columnas A..L (J = MEDIFE, K = SUELDO, L = 1% SUELDO)
+const FINAL_COL = 13; // M: total final por asociado (descuento + Medife + 1%)
+const LAST_COL = 13; // columnas A..M (J = MEDIFE, K = SUELDO, L = 1% SUELDO, M = TOTAL FINAL)
 
 export function parseMonth(month: string): { start: Date; end: Date; year: number; monthIndex: number } | null {
   const match = /^(\d{4})-(\d{2})$/.exec(month);
@@ -53,7 +54,7 @@ const thin = (argb: string): Partial<ExcelJS.Border> => ({ style: "thin", color:
 // asociados activos de esa empresa. Sin mora (la empresa descuenta la cuota
 // tal cual del recibo de haberes).
 export type LiquidacionLine = { detalle: string; fecha: Date | null; orden: string; cuota: string; vence: Date | null; monto: number; medife?: number; installmentId?: number };
-export type LiquidacionPerson = { number: string; name: string; dni: string; medife: number | null; subtotal: number; lines: LiquidacionLine[] };
+export type LiquidacionPerson = { number: string; name: string; dni: string; medife: number | null; medifeTotal: number; subtotal: number; lines: LiquidacionLine[] };
 
 // Calcula (sin armar el Excel) lo que hay que descontar a una empresa en un
 // mes: cuota social + cuotas de ordenes de compra. Lo usa el Excel y las cobranzas.
@@ -75,7 +76,8 @@ export async function computeLiquidacionData(companyId: number, month: string) {
         orderBy: { grantedAt: "asc" },
         include: {
           installments: {
-            where: { status: { not: "paid" }, dueDate: { gte: range.start, lt: range.end } },
+            // Se traen todas las impagas; abajo se separan las del mes de las que no.
+            where: { status: { not: "paid" } },
             orderBy: { number: "asc" },
           },
         },
@@ -102,6 +104,8 @@ export async function computeLiquidacionData(companyId: number, month: string) {
   let serviceTotal = 0;
   // Quienes quedan SIN cuota social y por que, para revisarlos (hoja "REVISAR").
   const review: { number: string; name: string; who: string; reason: string }[] = [];
+  // Órdenes activas con cuotas impagas, pero ninguna vence en el mes elegido.
+  const outside: { number: string; name: string; orden: string; fecha: Date; cuotas: string; proxVence: Date }[] = [];
 
   for (const a of affiliates) {
     const lines: Line[] = [];
@@ -177,7 +181,19 @@ export async function computeLiquidacionData(companyId: number, month: string) {
     }
 
     for (const loan of a.loans) {
-      for (const inst of loan.installments) {
+      const unpaid = loan.installments;
+      const inMonth = unpaid.filter((i: any) => i.dueDate >= range.start && i.dueDate < range.end);
+      if (inMonth.length === 0 && unpaid.length > 0) {
+        outside.push({
+          number: a.affiliateNumber,
+          name: titularName,
+          orden: loan.orderNumber || String(loan.id),
+          fecha: loan.grantedAt,
+          cuotas: `${unpaid.length} cuota(s) impaga(s) de ${loan.installmentsCount}`,
+          proxVence: unpaid[0].dueDate,
+        });
+      }
+      for (const inst of inMonth) {
         lines.push({
           detalle: "Orden de compra",
           fecha: loan.grantedAt,
@@ -196,14 +212,19 @@ export async function computeLiquidacionData(companyId: number, month: string) {
       name: `${a.lastName}, ${a.firstName}`.toUpperCase(),
       dni: a.dni,
       medife: null,
-      subtotal: Number(lines.reduce((sum, l) => sum + l.monto + (l.medife || 0), 0).toFixed(2)),
+      // "Total a descontar" SIN Medife (órdenes + cuotas sociales + servicios).
+      subtotal: Number(lines.reduce((sum, l) => sum + l.monto, 0).toFixed(2)),
+      medifeTotal: Number(lines.reduce((sum, l) => sum + (l.medife || 0), 0).toFixed(2)),
       lines,
     });
   }
 
-  const grandTotal = Number(people.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2));
+  // grandTotal (lo que se espera cobrar de la empresa) incluye Medife; el Excel
+  // muestra el total a descontar y el Medife por separado.
+  const grandTotal = Number(people.reduce((sum, p) => sum + p.subtotal + p.medifeTotal, 0).toFixed(2));
+  const grandTotalSinMedife = Number(people.reduce((sum, p) => sum + p.subtotal, 0).toFixed(2));
   const installmentsCount = people.reduce((sum, p) => sum + p.lines.filter((l) => l.orden !== "").length, 0);
-  return { company, range, people, grandTotal, installmentsCount, feeTotal, serviceTotal, withoutFee, review };
+  return { company, range, people, grandTotal, grandTotalSinMedife, installmentsCount, feeTotal, serviceTotal, withoutFee, review, outside };
 }
 
 export async function buildCompanyMonthlyLiquidacion(
@@ -212,7 +233,7 @@ export async function buildCompanyMonthlyLiquidacion(
 ): Promise<{ buffer: Buffer; companyName: string; empty: boolean } | null> {
   const data = await computeLiquidacionData(companyId, month);
   if (!data) return null;
-  const { company, range, people, grandTotal, installmentsCount, feeTotal, serviceTotal, withoutFee, review } = data;
+  const { company, range, people, grandTotal, grandTotalSinMedife, installmentsCount, feeTotal, serviceTotal, withoutFee, review, outside } = data;
   const periodLabel = `${MONTH_NAMES[range.monthIndex]} ${range.year}`;
 
   // --- Planilla ---
@@ -235,7 +256,7 @@ export async function buildCompanyMonthlyLiquidacion(
   ws.columns = [
     { width: 14 }, { width: 34 }, { width: 13 }, { width: 42 }, { width: 13 }, { width: 14 },
     { width: 9 }, { width: 16 }, { width: 22 },
-    { width: 16 }, { width: 18 }, { width: 18 },
+    { width: 16 }, { width: 18 }, { width: 18 }, { width: 24 },
   ];
 
   // Banda de encabezado (filas 1 a 4) sobre fondo azul.
@@ -297,7 +318,7 @@ export async function buildCompanyMonthlyLiquidacion(
   // Encabezado de la tabla (fila 8).
   const headers = [
     "N.º ASOCIADO", "APELLIDO Y NOMBRE", "D.N.I.", "DETALLE", "FECHA ORDEN", "N.º DE ORDEN",
-    "CUOTA", "MONTO CUOTA", "TOTAL A DESCONTAR", "MEDIFE", "SUELDO", "1% DEL SUELDO",
+    "CUOTA", "MONTO CUOTA", "TOTAL A DESCONTAR", "MEDIFE", "SUELDO", "1% DEL SUELDO", "TOTAL FINAL",
   ];
   const headerRow = ws.getRow(8);
   headerRow.height = 30;
@@ -305,7 +326,7 @@ export async function buildCompanyMonthlyLiquidacion(
     const cell = headerRow.getCell(i + 1);
     cell.value = text;
     cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: WHITE } };
-    cell.fill = fill(i === TOTAL_COL - 1 ? ORANGE : NAVY_SOFT);
+    cell.fill = fill(i === TOTAL_COL - 1 || i === FINAL_COL - 1 ? ORANGE : NAVY_SOFT);
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = { bottom: { style: "medium", color: { argb: ORANGE } } };
   });
@@ -331,12 +352,14 @@ export async function buildCompanyMonthlyLiquidacion(
         l.medife ?? null, // MEDIFE (titular y familiares)
         null, // SUELDO: lo completa la empresa
         idx === 0 ? { formula: `IF(K${row}="","",ROUND(K${row}*0.01,2))`, result: "" } : null, // 1% del sueldo
+        // Total final del asociado: total a descontar + Medife de todo su grupo + 1% del sueldo.
+        idx === 0 ? { formula: `I${row}+SUM(J${row}:J${row + p.lines.length - 1})+N(L${row})`, result: Number((p.subtotal + p.medifeTotal).toFixed(2)) } : null,
       ];
       values.forEach((value, i) => {
         const cell = r.getCell(i + 1);
         cell.value = value as ExcelJS.CellValue;
-        cell.fill = fill(i === TOTAL_COL - 1 && idx === 0 ? ORANGE_SOFT : i === SUELDO_COL - 1 ? "FFFFF9E5" : band);
-        cell.font = { name: "Calibri", size: 10, color: { argb: INK }, bold: idx === 0 && (i === 1 || i === TOTAL_COL - 1) };
+        cell.fill = fill((i === TOTAL_COL - 1 || i === FINAL_COL - 1) && idx === 0 ? ORANGE_SOFT : i === SUELDO_COL - 1 ? "FFFFF9E5" : band);
+        cell.font = { name: "Calibri", size: 10, color: { argb: INK }, bold: idx === 0 && (i === 1 || i === TOTAL_COL - 1 || i === FINAL_COL - 1) };
         cell.border = {
           top: idx === 0 ? thin("FF9DB4CC") : undefined,
           bottom: thin("FFD5E1EC"),
@@ -379,36 +402,39 @@ export async function buildCompanyMonthlyLiquidacion(
   const lastDataRow = row - 2; // la fila anterior a la de total quedó en blanco
   const totalRow = row;
   const totalCell = ws.getCell(row, TOTAL_COL);
-  totalCell.value = grandTotal;
+  totalCell.value = grandTotalSinMedife;
   totalCell.numFmt = MONEY_FORMAT;
   totalCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: WHITE } };
   totalCell.fill = fill(ORANGE);
   totalCell.alignment = { horizontal: "right", vertical: "middle" };
 
   // Suma de todos los sueldos que cargue la empresa y de sus 1% (fórmulas vivas).
-  const sumCell = (col: number, label?: string) => {
+  const sumCell = (col: number, cached = 0) => {
     const c = ws.getCell(totalRow, col);
     const letter = ws.getColumn(col).letter;
-    c.value = { formula: `SUM(${letter}${firstDataRow}:${letter}${Math.max(lastDataRow, firstDataRow)})`, result: 0 };
+    c.value = { formula: `SUM(${letter}${firstDataRow}:${letter}${Math.max(lastDataRow, firstDataRow)})`, result: cached };
     c.numFmt = MONEY_FORMAT;
     c.font = { name: "Calibri", size: 12, bold: true, color: { argb: WHITE } };
     c.alignment = { horizontal: "right", vertical: "middle" };
     return c;
   };
+  const medifeSum = Number(people.reduce((t, p) => t + p.medifeTotal, 0).toFixed(2));
+  sumCell(10, medifeSum); // MEDIFE
   sumCell(SUELDO_COL);
   sumCell(PCT_COL);
+  sumCell(FINAL_COL, grandTotal);
 
   // Última fila: total a descontar + 1% de los sueldos.
   row++;
   ws.getRow(row).height = 28;
-  ws.mergeCells(row, 1, row, TOTAL_COL - 1);
+  ws.mergeCells(row, 1, row, FINAL_COL - 1);
   const finalLabel = ws.getCell(row, 1);
-  finalLabel.value = "TOTAL A DESCONTAR + 1% DE LOS SUELDOS";
+  finalLabel.value = "TOTAL FINAL";
   finalLabel.font = { name: "Calibri", size: 13, bold: true, color: { argb: WHITE } };
   finalLabel.alignment = { horizontal: "right", vertical: "middle", indent: 1 };
   for (let c = 1; c <= LAST_COL; c++) ws.getCell(row, c).fill = fill(NAVY);
-  const finalCell = ws.getCell(row, TOTAL_COL);
-  finalCell.value = { formula: `${ws.getColumn(TOTAL_COL).letter}${totalRow}+N(${ws.getColumn(PCT_COL).letter}${totalRow})`, result: grandTotal };
+  const finalCell = ws.getCell(row, FINAL_COL);
+  finalCell.value = { formula: `${ws.getColumn(TOTAL_COL).letter}${totalRow}+N(J${totalRow})+N(${ws.getColumn(PCT_COL).letter}${totalRow})`, result: grandTotal };
   finalCell.numFmt = MONEY_FORMAT;
   finalCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: WHITE } };
   finalCell.fill = fill(ORANGE);
@@ -418,25 +444,45 @@ export async function buildCompanyMonthlyLiquidacion(
   ws.mergeCells(row, 1, row, LAST_COL);
   const summary = ws.getCell(row, 1);
   summary.value =
-    `${people.length} asociado(s) · medife incluido · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·${serviceTotal > 0 ? ` servicios $${serviceTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·` : ""} ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
-    (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin cuota social: ver la hoja REVISAR` : "");
+    `${people.length} asociado(s) · cuota social $${feeTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·${serviceTotal > 0 ? ` servicios $${serviceTotal.toLocaleString("es-AR", { minimumFractionDigits: 2 })} ·` : ""} ${installmentsCount} cuota(s) de órdenes · período ${periodLabel}` +
+    (withoutFee > 0 ? ` · ${withoutFee} persona(s) sin cuota social: ver la hoja REVISAR` : "") +
+    (outside.length > 0 ? ` · ${outside.length} orden(es) no entran en este mes: ver la hoja REVISAR` : "");
   summary.font = { name: "Calibri", size: 9, italic: true, color: { argb: "FF5B7A99" } };
   summary.alignment = { horizontal: "right", vertical: "middle" };
 
   // Hoja "REVISAR": quienes no tienen cuota social calculada y por que.
-  if (review.length > 0) {
+  if (review.length > 0 || outside.length > 0) {
     const rv = workbook.addWorksheet("REVISAR");
     rv.columns = [{ width: 16 }, { width: 34 }, { width: 34 }, { width: 80 }];
     rv.addRow(["Personas SIN cuota social en esta liquidación (para revisar antes de enviarla)"]).font = { bold: true, size: 12 };
     rv.addRow([]);
-    const hr = rv.addRow(["N.º ASOCIADO", "TITULAR", "PERSONA", "MOTIVO"]);
-    hr.eachCell((c) => {
-      c.font = { bold: true, color: { argb: WHITE } };
-      c.fill = fill(NAVY_SOFT);
-    });
-    for (const r of review) rv.addRow([r.number, r.name, r.who, r.reason]);
+    if (review.length > 0) {
+      const hr = rv.addRow(["N.º ASOCIADO", "TITULAR", "PERSONA", "MOTIVO"]);
+      hr.eachCell((c) => {
+        c.font = { bold: true, color: { argb: WHITE } };
+        c.fill = fill(NAVY_SOFT);
+      });
+      for (const r of review) rv.addRow([r.number, r.name, r.who, r.reason]);
+    } else {
+      rv.addRow(["(Todas las personas tienen cuota social)"]);
+    }
+    // Órdenes de compra que NO salen en este mes porque ninguna cuota vence en él.
+    if (outside.length > 0) {
+      rv.addRow([]);
+      rv.addRow([`Órdenes de compra con cuotas impagas que NO entran en ${periodLabel} (ninguna cuota vence en este mes)`]).font = { bold: true, size: 12 };
+      rv.addRow([]);
+      const oh = rv.addRow(["N.º ASOCIADO", "TITULAR", "ORDEN / FECHA", "CUOTAS Y PRÓXIMO VENCIMIENTO"]);
+      oh.eachCell((c) => {
+        c.font = { bold: true, color: { argb: WHITE } };
+        c.fill = fill(NAVY_SOFT);
+      });
+      const fmt = (d: Date) => d.toLocaleDateString("es-AR", { timeZone: "America/Argentina/Buenos_Aires" });
+      for (const o of outside) rv.addRow([o.number, o.name, `N° ${o.orden} del ${fmt(o.fecha)}`, `${o.cuotas} · próxima vence el ${fmt(o.proxVence)}`]);
+    }
   }
 
+  // Que Excel recalcule las fórmulas (1% y totales) al abrir el archivo.
+  workbook.calcProperties = { fullCalcOnLoad: true };
   const buffer = Buffer.from(await workbook.xlsx.writeBuffer());
   return { buffer, companyName: company.name, empty: people.length === 0 };
 }

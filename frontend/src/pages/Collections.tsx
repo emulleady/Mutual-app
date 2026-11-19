@@ -15,6 +15,7 @@ export default function Collections() {
   const [month, setMonth] = useState(currentMonth());
   const [summary, setSummary] = useState<any | null>(null);
   const [list, setList] = useState<any[]>([]);
+  const [allMonths, setAllMonths] = useState(false);
   const [overdue, setOverdue] = useState<any | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
@@ -29,10 +30,10 @@ export default function Collections() {
 
   function load() {
     api.collectionsSummary(month).then(setSummary).catch(() => setSummary(null));
-    api.listCollections(month).then(setList).catch(() => setList([]));
+    api.listCollections(allMonths ? "" : month).then(setList).catch(() => setList([]));
     api.collectionsOverdue(month).then(setOverdue).catch(() => setOverdue(null));
   }
-  useEffect(load, [month]);
+  useEffect(load, [month, allMonths]);
   useEffect(() => {
     api.listCompanies()
       .then((c: any) => {
@@ -246,14 +247,18 @@ export default function Collections() {
       </table>
 
       <h3>Cobranzas registradas</h3>
+      <label style={{ fontSize: 13, display: "block", marginBottom: 8 }}>
+        <input type="checkbox" checked={allMonths} onChange={(e) => setAllMonths(e.target.checked)} /> Ver las cobranzas de todos los meses
+      </label>
       <table className="data-table">
         <thead>
-          <tr><th>Fecha</th><th>Empresa</th><th>Monto</th><th>Cuenta</th><th>Cuotas marcadas</th><th>Nota</th><th></th></tr>
+          <tr><th>Fecha</th><th>Mes liquidado</th><th>Empresa</th><th>Monto</th><th>Cuenta</th><th>Cuotas marcadas</th><th>Nota</th><th></th></tr>
         </thead>
         <tbody>
           {list.map((p) => (
             <tr key={p.id} style={p.voided ? { opacity: 0.5, textDecoration: "line-through" } : undefined}>
               <td>{new Date(p.receivedAt).toLocaleDateString("es-AR")}</td>
+              <td>{p.month}</td>
               <td>{p.company.name}</td>
               <td>{money(p.amount)}</td>
               <td>{p.account.name}</td>
@@ -262,7 +267,7 @@ export default function Collections() {
               <td>{canManage && !p.voided && <button className="small-button" onClick={() => handleVoid(p)}>Anular</button>}</td>
             </tr>
           ))}
-          {list.length === 0 && <tr><td colSpan={7}>No hay cobranzas registradas en {month}.</td></tr>}
+          {list.length === 0 && <tr><td colSpan={8}>No hay cobranzas registradas{allMonths ? "" : ` en ${month}`}.</td></tr>}
         </tbody>
       </table>
     </div>
