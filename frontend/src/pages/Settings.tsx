@@ -14,6 +14,8 @@ export default function Settings() {
   const [nextNumberInput, setNextNumberInput] = useState("");
   const [counterError, setCounterError] = useState<string | null>(null);
   const [closingDay, setClosingDay] = useState<number | null>(null);
+  const [dueReview, setDueReview] = useState<any | null>(null);
+  const [dueMsg, setDueMsg] = useState<string | null>(null);
   const [closingInput, setClosingInput] = useState("");
   const [closingMsg, setClosingMsg] = useState<string | null>(null);
   const [closingError, setClosingError] = useState<string | null>(null);
@@ -199,14 +201,54 @@ export default function Settings() {
           : "No hay fecha de cierre cargada: todas las órdenes entran en el resumen que les corresponde por su fecha."}
       </p>
       <p className="note">
-        Funciona como el cierre de una tarjeta de crédito. Una orden de compra hecha hasta el día de cierre
-        (inclusive) entra en el resumen normal; una hecha después de ese día pasa al resumen del mes siguiente.
+        Una orden de compra hecha hasta el día de cierre (inclusive) tiene su primera cuota en la liquidación de ese mismo mes;
+        una hecha después de ese día, en la liquidación del mes siguiente.
         {closingDay
-          ? ` Ejemplo con cierre el ${closingDay}: una orden del día ${closingDay} tiene su primera cuota en el resumen del mes siguiente; ${closingDay < 31 ? ` una del día ${closingDay + 1}, un mes después.` : ""}`
+          ? ` Ejemplo con cierre el ${closingDay}: una orden del día ${closingDay} de octubre se liquida en octubre${closingDay < 31 ? `; una del día ${closingDay + 1}, en noviembre.` : "."}`
           : ""}{" "}
-        Se aplica a las órdenes que se carguen (o cuya fecha se cambie) desde ahora; las que ya están cargadas no se mueven.
+        Se aplica solo a las órdenes que se carguen (o cuya fecha se cambie) desde ahora. Para las ya cargadas usá el botón de abajo, que muestra qué cambiaría antes de aplicarlo.
         Dejá el campo vacío para no usar fecha de cierre.
       </p>
+      <div style={{ margin: "12px 0" }}>
+        <button type="button" className="small-button" onClick={async () => {
+          setDueMsg(null);
+          try { setDueReview(await api.previewDueDates()); } catch (e: any) { setDueMsg(e.message || "No se pudo revisar"); }
+        }}>Revisar vencimientos de las órdenes ya cargadas</button>
+        {dueMsg && <p className="note">{dueMsg}</p>}
+        {dueReview && (
+          <div style={{ marginTop: 8 }}>
+            <p className="note">
+              {dueReview.count === 0
+                ? "Todas las órdenes impagas tienen su vencimiento de acuerdo al día de cierre actual."
+                : `${dueReview.count} cuota(s) impaga(s) tienen un vencimiento distinto al que les corresponde con el cierre actual. Las cuotas ya cobradas no se tocan.`}
+            </p>
+            {dueReview.count > 0 && (
+              <>
+                <table className="data-table">
+                  <thead><tr><th>Orden</th><th>Asociado</th><th>Cuota</th><th>Vence hoy</th><th>Pasaría a</th></tr></thead>
+                  <tbody>
+                    {dueReview.sample.map((c: any) => (
+                      <tr key={c.installmentId}>
+                        <td>{c.order}</td><td>{c.affiliate}</td><td>{c.cuota}</td>
+                        <td>{new Date(c.from).toLocaleDateString("es-AR")}</td>
+                        <td><b>{new Date(c.to).toLocaleDateString("es-AR")}</b></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <button type="button" style={{ marginTop: 8 }} onClick={async () => {
+                  if (!window.confirm(`Se van a corregir ${dueReview.count} vencimiento(s). ¿Continuar?`)) return;
+                  try {
+                    const r = await api.applyDueDates();
+                    setDueMsg(`Listo: se corrigieron ${r.updated} vencimiento(s).`);
+                    setDueReview(null);
+                  } catch (e: any) { setDueMsg(e.message || "No se pudo aplicar"); }
+                }}>Corregir estos vencimientos</button>
+              </>
+            )}
+          </div>
+        )}
+      </div>
       <form className="inline-form" onSubmit={handleClosingSubmit}>
         <input
           type="number" min={1} max={31}

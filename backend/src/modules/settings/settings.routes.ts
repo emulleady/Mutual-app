@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../../db";
 import { AuthenticatedRequest, requireAuth, requirePermission } from "../../middleware/auth";
 import { logAudit } from "../../middleware/audit";
+import { getClosingDay, statementShift } from "../loans/statement";
 
 const router = Router();
 router.use(requireAuth);
@@ -100,6 +101,59 @@ router.post("/order-counter", requirePermission("settings.manage"), async (req: 
 router.get("/closing-day", async (_req, res) => {
   const row = await prisma.statementSetting.findUnique({ where: { id: 1 } });
   res.json({ closingDay: row?.closingDay ?? null, updatedAt: row?.updatedAt ?? null });
+});
+
+// Revisión de vencimientos de órdenes ya cargadas con el día de cierre actual:
+// una orden cargada antes de configurar el cierre (o con otro día de cierre)
+// puede tener su primera cuota en un mes distinto al que le corresponde.
+async function dueDateChanges() {
+  const closingDay = await getClosingDay();
+  const ym = (d: Date) =>
+    new Intl.DateTimeFormat("en-CA", { timeZone: "America/Argentina/Buenos_Aires", year: "numeric", month: "2-digit" }).format(d);
+  const loans = await prisma.loan.findMany({
+    where: { status: { in: ["active", "overdue", "pending", "approved"] } },
+    include: {
+      affiliate: { select: { firstName: true, lastName: true, affiliateNumber: true } },
+      installments: { orderBy: { number: "asc" } },
+    },
+  });
+  const changes: { installmentId: number; loanId: number; order: string; affiliate: string; cuota: string; from: Date; to: Date }[] = [];
+  for (const loan of loans) {
+    const shift = statementShift(loan.grantedAt, closingDay);
+    for (const inst of loan.installments) {
+      if (inst.status === "paid" || inst.paidAmount > 0) continue; // no se tocan las ya cobradas
+      const to = new Date(loan.grantedAt);
+      to.setMonth(to.getMonth() + inst.number - 1 + shift);
+      if (ym(to) !== ym(inst.dueDate)) {
+        changes.push({
+          installmentId: inst.id, loanId: loan.id, order: loan.orderNumber || String(loan.id),
+          affiliate: `${loan.affiliate.lastName}, ${loan.affiliate.firstName} (${loan.affiliate.affiliateNumber})`,
+          cuota: `${inst.number}/${loan.installmentsCount}`, from: inst.dueDate, to,
+        });
+      }
+    }
+  }
+  return { closingDay, changes };
+}
+
+router.get("/closing-day/recalculate", requirePermission("settings.manage"), async (_req, res) => {
+  const { closingDay, changes } = await dueDateChanges();
+  res.json({ closingDay, count: changes.length, sample: changes.slice(0, 200) });
+});
+
+router.post("/closing-day/recalculate", requirePermission("settings.manage"), async (req: AuthenticatedRequest, res) => {
+  const { changes } = await dueDateChanges();
+  await prisma.$transaction(async (tx) => {
+    for (const c of changes) {
+      await tx.loanInstallment.update({ where: { id: c.installmentId }, data: { dueDate: c.to } });
+    }
+  });
+  await logAudit({
+    userId: req.user?.id, action: "update", entityType: "loan_installments", entityId: 0,
+    afterData: { recalculated: changes.length, loans: Array.from(new Set(changes.map((c) => c.loanId))) },
+    ipAddress: req.ip,
+  });
+  res.json({ updated: changes.length });
 });
 
 const closingDaySchema = z.object({ closingDay: z.number().int().min(1).max(31).nullable() });

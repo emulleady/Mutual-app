@@ -262,7 +262,7 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
       installments: {
         create: Array.from({ length: data.installmentsCount }, (_, i) => {
           const dueDate = new Date(grantedAt);
-          dueDate.setMonth(dueDate.getMonth() + i + 1 + shift);
+          dueDate.setMonth(dueDate.getMonth() + i + shift);
           return { number: i + 1, dueDate, amount: installmentValue };
         }),
       },
@@ -431,7 +431,7 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
       const unpaid = loan.installments.filter((i) => i.status !== "paid");
       for (const inst of unpaid) {
         const dueDate = new Date(updateData.grantedAt);
-        dueDate.setMonth(dueDate.getMonth() + inst.number + editShift);
+        dueDate.setMonth(dueDate.getMonth() + inst.number - 1 + editShift);
         await tx.loanInstallment.update({
           where: { id: inst.id },
           data: { dueDate, status: "pending" },

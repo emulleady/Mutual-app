@@ -116,6 +116,8 @@ export const api = {
   setOrderCounter: (nextNumber: number) =>
     request("/settings/order-counter", { method: "POST", body: JSON.stringify({ nextNumber }) }),
   getClosingDay: () => request("/settings/closing-day"),
+  previewDueDates: () => request("/settings/closing-day/recalculate"),
+  applyDueDates: () => request("/settings/closing-day/recalculate", { method: "POST" }),
   setClosingDay: (closingDay: number | null) =>
     request("/settings/closing-day", { method: "POST", body: JSON.stringify({ closingDay }) }),
   getMembershipFees: () => request("/settings/membership-fees"),
