@@ -223,6 +223,18 @@ model OrderCounter {
 // Participante, Socio Deportivo, Honorario). Se usa para precargar el
 // campo "Valor de cuota" al dar de alta o editar un asociado; no cambia
 // retroactivamente el valor ya cargado de nadie.
+// Descuento de Farmacia (medicamentos y productos de farmacia) segun el tipo de socio.
+model PharmacyDiscountSetting {
+  id              Int      @id @default(autoincrement())
+  socioType       String   @unique
+  medicinesPct    Float    @default(0)
+  productsPct     Float    @default(0)
+  updatedByUserId Int?
+  updatedAt       DateTime @updatedAt
+
+  @@map("pharmacy_discount_settings")
+}
+
 model MembershipFeeSetting {
   id              Int      @id @default(autoincrement())
   socioType       String   @unique

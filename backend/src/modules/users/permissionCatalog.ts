@@ -23,6 +23,7 @@ export const ALL_PERMISSION_KEYS = [
   "inventory.view",
   "finance.view",
   "settings.view",
+  "pharmacy.view",
 ];
 
 export async function ensurePermissionsExist(): Promise<void> {
@@ -34,6 +35,16 @@ export async function ensurePermissionsExist(): Promise<void> {
       // "Ver órdenes de compra" es nuevo: para que los roles existentes sigan
       // viendo lo que veían, se les otorga al crearse. Se exceptúan los roles
       // de Farmacia, que no deben ver órdenes de compra.
+      if (key === "pharmacy.view") {
+        // Los roles de Farmacia pasan a ver solo la consulta de Farmacia.
+        const roles = await prisma.role.findMany();
+        const aff = await prisma.permission.findUnique({ where: { key: "affiliates.view" } });
+        for (const role of roles) {
+          if (!/farmacia/i.test(role.name)) continue;
+          await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: created.id } });
+          if (aff) await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: aff.id } });
+        }
+      }
       if (key === "orders.view") {
         const roles = await prisma.role.findMany();
         for (const role of roles) {

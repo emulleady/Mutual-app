@@ -1,4 +1,5 @@
 import * as XLSX from "xlsx";
+import { syncDependentsWithTitular } from "./sync";
 import { prisma } from "../../db";
 import { logAffiliateEvent, logAudit } from "../../middleware/audit";
 
@@ -396,6 +397,8 @@ export async function importAffiliatesFromExcel(
       }
     }
   }
+
+  await syncDependentsWithTitular();
 
   await logAudit({
     userId,

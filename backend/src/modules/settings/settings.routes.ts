@@ -181,6 +181,33 @@ router.post("/closing-day", requirePermission("settings.manage"), async (req: Au
   res.json({ closingDay: updated.closingDay, updatedAt: updated.updatedAt });
 });
 
+// Descuentos de Farmacia por tipo de socio.
+router.get("/pharmacy-discounts", requirePermission("settings.view"), async (_req, res) => {
+  res.json(await prisma.pharmacyDiscountSetting.findMany({ orderBy: { socioType: "asc" } }));
+});
+
+const pharmacyDiscountSchema = z.object({
+  socioType: z.string().min(1),
+  medicinesPct: z.number().min(0).max(100),
+  productsPct: z.number().min(0).max(100),
+});
+
+router.post("/pharmacy-discounts", requirePermission("settings.manage"), async (req: AuthenticatedRequest, res) => {
+  const parsed = pharmacyDiscountSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
+  const { socioType, medicinesPct, productsPct } = parsed.data;
+  const updated = await prisma.pharmacyDiscountSetting.upsert({
+    where: { socioType },
+    update: { medicinesPct, productsPct, updatedByUserId: req.user?.id },
+    create: { socioType, medicinesPct, productsPct, updatedByUserId: req.user?.id },
+  });
+  await logAudit({
+    userId: req.user?.id, action: "update", entityType: "pharmacy_discount_setting", entityId: updated.id,
+    afterData: { socioType, medicinesPct, productsPct }, ipAddress: req.ip,
+  });
+  res.json(updated);
+});
+
 // Valor de cuota por defecto segun el tipo de socio. Cualquier usuario
 // autenticado puede consultarlo (se usa para precargar el campo al cargar
 // o editar un asociado), pero solo el administrador puede modificarlo.

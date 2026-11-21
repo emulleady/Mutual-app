@@ -15,6 +15,8 @@ export default function Layout({
   canInventory,
   canFinance,
   canOrders,
+  canPharmacy,
+  pharmacyOnly,
 }: {
   children: React.ReactNode;
   onLogout: () => void;
@@ -27,6 +29,8 @@ export default function Layout({
   canInventory?: boolean;
   canFinance?: boolean;
   canOrders?: boolean;
+  canPharmacy?: boolean;
+  pharmacyOnly?: boolean;
 }) {
   const navigate = useNavigate();
   const location = useLocation();
@@ -80,10 +84,11 @@ export default function Layout({
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to="/" className="brand">
+        <Link to={pharmacyOnly ? "/farmacia" : "/"} className="brand">
           <img src="/logo.png" alt="Mutual Petrolero Privado" className="brand-logo" />
           <span>Mutual Petrolero Privado</span>
         </Link>
+        {!pharmacyOnly && (
         <div className="search-wrapper">
           <form className="search-form" onSubmit={handleSearch}>
             <input
@@ -120,9 +125,11 @@ export default function Layout({
             </div>
           )}
         </div>
+        )}
         <nav>
-          <Link to="/">Resumen</Link>
-          <Link to="/afiliados">Asociados</Link>
+          {!pharmacyOnly && <Link to="/">Resumen</Link>}
+          {!pharmacyOnly && <Link to="/afiliados">Asociados</Link>}
+          {canPharmacy && <Link to="/farmacia">Farmacia</Link>}
           {canOrders && <Link to="/ordenes">Órdenes</Link>}
           {canSettings && <Link to="/configuracion">Configuración</Link>}
           {canUsers && <Link to="/usuarios">Usuarios</Link>}

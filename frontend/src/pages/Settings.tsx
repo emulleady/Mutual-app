@@ -20,6 +20,8 @@ export default function Settings() {
   const [closingMsg, setClosingMsg] = useState<string | null>(null);
   const [closingError, setClosingError] = useState<string | null>(null);
   const [fees, setFees] = useState<any[]>([]);
+  const [pharmInputs, setPharmInputs] = useState<Record<string, { med: string; prod: string }>>({});
+  const [pharmMsg, setPharmMsg] = useState<string | null>(null);
   const [feeInputs, setFeeInputs] = useState<Record<string, string>>({});
   const [feeError, setFeeError] = useState<string | null>(null);
   const [feeSavedType, setFeeSavedType] = useState<string | null>(null);
@@ -56,6 +58,30 @@ export default function Settings() {
     }).catch(() => {});
   }
   useEffect(loadFees, []);
+
+  function loadPharmacy() {
+    api.getPharmacyDiscounts().then((list: any[]) => {
+      const inputs: Record<string, { med: string; prod: string }> = {};
+      SOCIO_TYPES.forEach((t) => {
+        const e = list.find((d) => d.socioType === t);
+        inputs[t] = { med: e ? String(e.medicinesPct) : "", prod: e ? String(e.productsPct) : "" };
+      });
+      setPharmInputs(inputs);
+    }).catch(() => {});
+  }
+  useEffect(loadPharmacy, []);
+
+  async function savePharmacy(t: string, e: React.FormEvent) {
+    e.preventDefault();
+    setPharmMsg(null);
+    try {
+      await api.setPharmacyDiscount(t, Number(pharmInputs[t]?.med || 0), Number(pharmInputs[t]?.prod || 0));
+      setPharmMsg(`Guardado: ${t}`);
+      loadPharmacy();
+    } catch (err: any) {
+      setPharmMsg(err.message || "No se pudo guardar");
+    }
+  }
 
   async function handleFeeSubmit(socioType: string, e: React.FormEvent) {
     e.preventDefault();
@@ -293,6 +319,34 @@ export default function Settings() {
                 </form>
               </td>
               <td></td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+
+      <h1 style={{ marginTop: 40 }}>Descuentos de Farmacia</h1>
+      <p className="note">
+        Porcentaje de descuento por tipo de socio. Es lo que ve la Farmacia al consultar a un asociado y a sus familiares
+        (solo si están activos).
+      </p>
+      {pharmMsg && <p className="note">{pharmMsg}</p>}
+      <table className="data-table">
+        <thead><tr><th>Tipo de socio</th><th>Medicamentos (%)</th><th>Productos de farmacia (%)</th><th></th></tr></thead>
+        <tbody>
+          {SOCIO_TYPES.map((t) => (
+            <tr key={t}>
+              <td>{t}</td>
+              <td colSpan={3}>
+                <form className="inline-form" onSubmit={(e) => savePharmacy(t, e)} style={{ margin: 0 }}>
+                  <input type="number" min="0" max="100" step="0.01" placeholder="%" style={{ width: 110 }}
+                    value={pharmInputs[t]?.med ?? ""}
+                    onChange={(e) => setPharmInputs({ ...pharmInputs, [t]: { med: e.target.value, prod: pharmInputs[t]?.prod ?? "" } })} />
+                  <input type="number" min="0" max="100" step="0.01" placeholder="%" style={{ width: 110, marginLeft: 24 }}
+                    value={pharmInputs[t]?.prod ?? ""}
+                    onChange={(e) => setPharmInputs({ ...pharmInputs, [t]: { prod: e.target.value, med: pharmInputs[t]?.med ?? "" } })} />
+                  <button type="submit" className="small-button">Guardar</button>
+                </form>
+              </td>
             </tr>
           ))}
         </tbody>

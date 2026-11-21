@@ -14,6 +14,7 @@ import Inventory from "./pages/Inventory";
 import Collections from "./pages/Collections";
 import Cash from "./pages/Cash";
 import Roles from "./pages/Roles";
+import Pharmacy from "./pages/Pharmacy";
 import Layout from "./components/Layout";
 import { canView } from "./utils/permissions";
 
@@ -65,6 +66,9 @@ export default function App() {
   const canInventory = canView("inventory");
   const canFinance = canView("finance");
   const canOrders = can("orders.view");
+  const canPharmacy = can("pharmacy.view");
+  // Farmacia: si solo tiene la consulta de Farmacia (sin ver asociados), es lo unico que ve.
+  const pharmacyOnly = canPharmacy && !isAdmin && !can("affiliates.view");
 
   return (
     <Layout
@@ -78,9 +82,18 @@ export default function App() {
       canInventory={canInventory}
       canFinance={canFinance}
       canOrders={canOrders}
+      canPharmacy={canPharmacy}
+      pharmacyOnly={pharmacyOnly}
     >
+      {pharmacyOnly ? (
+      <Routes>
+        <Route path="/farmacia" element={<Pharmacy />} />
+        <Route path="*" element={<Navigate to="/farmacia" replace />} />
+      </Routes>
+      ) : (
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        {canPharmacy && <Route path="/farmacia" element={<Pharmacy />} />}
         <Route path="/afiliados" element={<AffiliatesList />} />
         <Route path="/afiliados/:id" element={<AffiliateProfile />} />
         {canOrders && <Route path="/ordenes" element={<Orders />} />}
@@ -95,6 +108,7 @@ export default function App() {
         {canFinance && <Route path="/caja" element={<Cash />} />}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      )}
     </Layout>
   );
 }

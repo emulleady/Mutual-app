@@ -14,6 +14,8 @@ import auditRoutes from "./modules/audit/audit.routes";
 import agreementsRoutes from "./modules/agreements/agreements.routes";
 import inventoryRoutes from "./modules/inventory/inventory.routes";
 import financeRoutes from "./modules/finance/finance.routes";
+import { syncDependentsWithTitular } from "./modules/affiliates/sync";
+import pharmacyRoutes from "./modules/pharmacy/pharmacy.routes";
 
 const app = express();
 
@@ -37,11 +39,15 @@ app.use("/api/audit", auditRoutes);
 app.use("/api/agreements", agreementsRoutes);
 app.use("/api/inventory", inventoryRoutes);
 app.use("/api/finance", financeRoutes);
+app.use("/api/pharmacy", pharmacyRoutes);
 
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 
 const port = process.env.PORT || 4000;
 ensurePermissionsExist().catch((e) => console.error("No se pudieron crear los permisos:", e));
+syncDependentsWithTitular()
+  .then((n) => n > 0 && console.log(`Familiares dados de baja junto con su titular: ${n}`))
+  .catch((e) => console.error("No se pudo sincronizar familiares:", e));
 
 app.listen(port, () => {
   console.log(`API escuchando en http://localhost:${port}`);

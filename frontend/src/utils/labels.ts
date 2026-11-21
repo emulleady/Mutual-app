@@ -70,6 +70,7 @@ export const permissionLabels: Record<string, string> = {
   "agreements.view": "Convenios: solo ver",
   "inventory.view": "Inventario: solo ver",
   "settings.view": "Configuración: solo ver",
+  "pharmacy.view": "Farmacia: consulta de estado y descuento del asociado y su familia",
 };
 
 export function translate(map: Record<string, string>, value: string): string {

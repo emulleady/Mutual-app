@@ -26,7 +26,6 @@ const DATE_FORMAT = "dd/mm/yyyy";
 const TOTAL_COL = 9; // columna I: total a descontar
 const SUELDO_COL = 11; // K: la empresa completa el sueldo
 const PCT_COL = 12; // L: 1% del sueldo (fórmula)
-const BLUE = "FF538DD5"; // columna I (descuentos) y su total
 const FINAL_COL = 13; // M: total final por asociado (descuento + Medife + 1%)
 const LAST_COL = 13; // columnas A..M (J = MEDIFE, K = SUELDO, L = 1% SUELDO, M = TOTAL FINAL)
 
@@ -327,7 +326,7 @@ export async function buildCompanyMonthlyLiquidacion(
     const cell = headerRow.getCell(i + 1);
     cell.value = text;
     cell.font = { name: "Calibri", size: 10, bold: true, color: { argb: WHITE } };
-    cell.fill = fill(i === TOTAL_COL - 1 ? BLUE : i === FINAL_COL - 1 ? ORANGE : NAVY_SOFT);
+    cell.fill = fill(i === FINAL_COL - 1 ? ORANGE : NAVY_SOFT);
     cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
     cell.border = { bottom: { style: "medium", color: { argb: ORANGE } } };
   });
@@ -359,7 +358,7 @@ export async function buildCompanyMonthlyLiquidacion(
       values.forEach((value, i) => {
         const cell = r.getCell(i + 1);
         cell.value = value as ExcelJS.CellValue;
-        cell.fill = fill((i === TOTAL_COL - 1 || i === FINAL_COL - 1) && idx === 0 ? ORANGE_SOFT : i === SUELDO_COL - 1 ? "FFFFF9E5" : band);
+        cell.fill = fill(i === FINAL_COL - 1 && idx === 0 ? ORANGE_SOFT : i === SUELDO_COL - 1 ? "FFFFF9E5" : band);
         cell.font = { name: "Calibri", size: 10, color: { argb: INK }, bold: idx === 0 && (i === 1 || i === TOTAL_COL - 1 || i === FINAL_COL - 1) };
         cell.border = {
           top: idx === 0 ? thin("FF9DB4CC") : undefined,
@@ -396,7 +395,7 @@ export async function buildCompanyMonthlyLiquidacion(
   ws.getRow(row).height = 28;
   ws.mergeCells(row, 1, row, TOTAL_COL - 1);
   const totalLabel = ws.getCell(row, 1);
-  totalLabel.value = "TOTAL A DESCONTAR";
+  totalLabel.value = ""; // la leyenda no se muestra
   totalLabel.font = { name: "Calibri", size: 13, bold: true, color: { argb: WHITE } };
   totalLabel.alignment = { horizontal: "right", vertical: "middle", indent: 1 };
   for (let c = 1; c <= LAST_COL; c++) ws.getCell(row, c).fill = fill(NAVY);
@@ -404,9 +403,11 @@ export async function buildCompanyMonthlyLiquidacion(
   const totalRow = row;
   const totalCell = ws.getCell(row, TOTAL_COL);
   totalCell.value = grandTotalSinMedife;
-  totalCell.numFmt = MONEY_FORMAT;
-  totalCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: WHITE } };
-  totalCell.fill = fill(BLUE);
+  // El total a descontar no se muestra (celda con el mismo color de la fila y formato
+  // oculto), pero sigue en la celda para que el TOTAL FINAL lo siga sumando.
+  totalCell.numFmt = ";;;";
+  totalCell.font = { name: "Calibri", size: 14, bold: true, color: { argb: NAVY } };
+  totalCell.fill = fill(NAVY);
   totalCell.alignment = { horizontal: "right", vertical: "middle" };
 
   // Suma de todos los sueldos que cargue la empresa y de sus 1% (fórmulas vivas).

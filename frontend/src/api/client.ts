@@ -120,6 +120,10 @@ export const api = {
   applyDueDates: () => request("/settings/closing-day/recalculate", { method: "POST" }),
   setClosingDay: (closingDay: number | null) =>
     request("/settings/closing-day", { method: "POST", body: JSON.stringify({ closingDay }) }),
+  pharmacyLookup: (q: string) => request(`/pharmacy/lookup?q=${encodeURIComponent(q)}`),
+  getPharmacyDiscounts: () => request("/settings/pharmacy-discounts"),
+  setPharmacyDiscount: (socioType: string, medicinesPct: number, productsPct: number) =>
+    request("/settings/pharmacy-discounts", { method: "POST", body: JSON.stringify({ socioType, medicinesPct, productsPct }) }),
   getMembershipFees: () => request("/settings/membership-fees"),
   getServiceTypes: () => request("/services/types"),
   createServiceType: (data: { name: string; defaultAmount: number }) =>
