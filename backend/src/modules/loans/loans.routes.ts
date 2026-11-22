@@ -350,6 +350,43 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
   res.status(201).json(payment);
 });
 
+// Firma manuscrita del asociado tomada en pantalla (tablet con lapiz). Se guarda
+// como imagen PNG y sale en el PDF de la orden. Una vez firmada no se reemplaza.
+const signatureSchema = z.object({
+  image: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La firma debe ser una imagen PNG").max(700_000),
+});
+
+router.post("/:id/signature", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+  const id = Number(req.params.id);
+  const parsed = signatureSchema.safeParse(req.body);
+  if (!parsed.success) return res.status(400).json({ error: "Firma inválida" });
+
+  const loan = await prisma.loan.findUnique({ where: { id } });
+  if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (loan.signatureImage) return res.status(409).json({ error: "La orden ya está firmada" });
+
+  const signedAt = new Date();
+  await prisma.loan.update({
+    where: { id },
+    data: { signatureImage: parsed.data.image, signedAt, signedByUserId: req.user?.id ?? null },
+  });
+
+  await logAffiliateEvent({
+    affiliateId: loan.affiliateId,
+    eventType: "loan_signed",
+    description: `El asociado firmó digitalmente la orden de compra ${loan.orderNumber || loan.id}`,
+    referenceTable: "loans",
+    referenceId: id,
+    createdByUserId: req.user?.id,
+  });
+  await logAudit({
+    userId: req.user?.id, action: "update", entityType: "loan", entityId: id,
+    afterData: { signed: true, signedAt }, ipAddress: req.ip,
+  });
+
+  res.json({ ok: true, signedAt });
+});
+
 // Descarga la Orden de Compra en PDF, lista para que firme el afiliado.
 router.get("/:id/forms/orden-compra", requirePermission("orders.view"), async (req, res) => {
   const id = Number(req.params.id);
@@ -393,6 +430,9 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
 
   const loan = await prisma.loan.findUnique({ where: { id }, include: { installments: true } });
   if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
+  if (loan.signatureImage) {
+    return res.status(400).json({ error: "La orden ya está firmada por el asociado: no se puede cambiar su fecha ni su número" });
+  }
 
   const updateData: { grantedAt?: Date; orderNumber?: string } = {};
   const changes: string[] = [];

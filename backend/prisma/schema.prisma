@@ -204,6 +204,9 @@ model Loan {
   cancelledAt       DateTime?
   cancellationReason String?
   createdByUserId   Int?
+  signatureImage    String?  // firma manuscrita del asociado (PNG en base64, data URL)
+  signedAt          DateTime?
+  signedByUserId    Int?     // usuario que tomo la firma en pantalla
   affiliate         Affiliate @relation(fields: [affiliateId], references: [id])
   installments      LoanInstallment[]
 

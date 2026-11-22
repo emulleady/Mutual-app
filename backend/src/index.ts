@@ -25,7 +25,7 @@ const app = express();
 // se permite cualquier origen (para no trabar el proxy de Vite).
 const frontendUrl = process.env.FRONTEND_URL;
 app.use(cors(frontendUrl ? { origin: frontendUrl } : {}));
-app.use(express.json());
+app.use(express.json({ limit: "1mb" }));
 
 app.use("/api/auth", authRoutes);
 app.use("/api/affiliates", affiliatesRoutes);

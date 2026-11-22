@@ -108,6 +108,8 @@ export const api = {
     request("/loans/payments", { method: "POST", body: JSON.stringify(data) }),
   downloadOrdenCompra: (loanId: number, orderNumber: string) =>
     downloadFile(`/loans/${loanId}/forms/orden-compra`, `orden-compra-${orderNumber}.pdf`),
+  signLoan: (loanId: number, image: string) =>
+    request(`/loans/${loanId}/signature`, { method: "POST", body: JSON.stringify({ image }) }),
   deleteLoan: (loanId: number) => request(`/loans/${loanId}`, { method: "DELETE" }),
   getInterestRates: () => request("/settings/interest-rate"),
   setInterestRate: (data: unknown) =>

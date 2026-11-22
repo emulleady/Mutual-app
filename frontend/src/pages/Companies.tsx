@@ -10,6 +10,9 @@ export default function Companies() {
   const [selected, setSelected] = useState<any | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", cuit: "", address: "", phone: "", email: "", contactName: "", contactEmail: "", contactMobile: "" });
+  const [search, setSearch] = useState("");
+  // Por defecto se muestran solo las empresas activas.
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("active");
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
   const [importing, setImporting] = useState(false);
@@ -74,6 +77,15 @@ export default function Companies() {
     load();
     if (selected?.id === id) openCompany(id);
   }
+
+  const fold = (s: any) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const term = fold(search.trim());
+  const visibleCompanies = companies.filter((c) => {
+    if (statusFilter === "active" && !c.active) return false;
+    if (statusFilter === "inactive" && c.active) return false;
+    if (!term) return true;
+    return [c.name, c.cuit, c.contactName, c.phone, c.email].some((v) => fold(v).includes(term));
+  });
 
   if (selected) {
     return (
@@ -195,10 +207,25 @@ export default function Companies() {
         </form>
       )}
 
+      <div style={{ display: "flex", gap: 8, margin: "12px 0", flexWrap: "wrap" }}>
+        <input
+          placeholder="Buscar por nombre, CUIT, contacto o teléfono"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          style={{ minWidth: 300 }}
+        />
+        <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} aria-label="Filtrar por estado">
+          <option value="active">Activas</option>
+          <option value="inactive">Inactivas</option>
+          <option value="">Todas</option>
+        </select>
+      </div>
+      <p className="note">{visibleCompanies.length} empresa(s){statusFilter === "active" ? " activa(s)" : statusFilter === "inactive" ? " inactiva(s)" : ""}</p>
+
       <table className="data-table">
         <thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Teléfono</th><th>Estado</th></tr></thead>
         <tbody>
-          {companies.map((c) => (
+          {visibleCompanies.map((c) => (
             <tr key={c.id} className="clickable-row" onClick={() => openCompany(c.id)}>
               <td>{c.name}</td>
               <td>{c.cuit || "—"}</td>

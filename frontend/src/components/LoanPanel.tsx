@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { installmentStatusLabels, loanStatusLabels, translate } from "../utils/labels";
 import { hasPermission } from "../utils/permissions";
+import SignaturePad from "./SignaturePad";
 
 export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   const [loans, setLoans] = useState<any[]>([]);
@@ -13,6 +14,10 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   const [editing, setEditing] = useState(false);
   const [editForm, setEditForm] = useState({ orderNumber: "", orderDate: "" });
   const [editError, setEditError] = useState<string | null>(null);
+  // Orden recien cargada o abierta a la que se le va a tomar la firma del asociado.
+  const [askSign, setAskSign] = useState<any | null>(null);
+  const [signing, setSigning] = useState<any | null>(null);
+  const canSign = hasPermission("affiliates.edit");
 
   function loadLoans() {
     api.loansByAffiliate(affiliateId).then(setLoans).catch(() => {});
@@ -29,7 +34,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
     e.preventDefault();
     setError(null);
     try {
-      await api.createLoan({
+      const created = await api.createLoan({
         affiliateId,
         loanType: form.loanType,
         amount: Number(form.amount),
@@ -44,6 +49,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
       setShowForm(false);
       setForm({ loanType: "", amount: "", installmentsCount: "", orderDate: "", orderNumber: "" });
       loadLoans();
+      if (canSign && created?.id) setAskSign(created);
     } catch (err: any) {
       setError(err.message || "No se pudo crear la orden de compra");
     }
@@ -95,12 +101,45 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
 
   const isAdmin = localStorage.getItem("role") === "Administrador";
 
+  async function saveSignature(loan: any, image: string) {
+    await api.signLoan(loan.id, image);
+    setSigning(null);
+    setAskSign(null);
+    if (selectedLoan && selectedLoan.id === loan.id) setSelectedLoan(await api.getLoan(loan.id));
+    loadLoans();
+  }
+
+  const signUi = (
+    <>
+      {askSign && !signing && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div style={{ background: "#fff", borderRadius: 10, padding: 20, maxWidth: 420, color: "#111" }}>
+            <h3 style={{ marginTop: 0 }}>Orden {askSign.orderNumber || askSign.id} cargada</h3>
+            <p>¿El asociado quiere firmar digitalmente? Si no, podés imprimirla y firmarla a mano.</p>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+              <button type="button" className="small-button" onClick={() => setAskSign(null)}>No, imprimir</button>
+              <button type="button" onClick={() => setSigning(askSign)}>Firmar ahora</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {signing && (
+        <SignaturePad
+          title={`Firma del asociado — Orden ${signing.orderNumber || signing.id}`}
+          onCancel={() => { setSigning(null); setAskSign(null); }}
+          onConfirm={(img) => saveSignature(signing, img)}
+        />
+      )}
+    </>
+  );
+
   const activeLoans = loans.filter((l) => l.status === "active" || l.status === "overdue");
   const historicalLoans = loans.filter((l) => l.status !== "active" && l.status !== "overdue");
 
   if (selectedLoan) {
     return (
       <div>
+        {signUi}
         <button className="link-button-dark" onClick={() => { setSelectedLoan(null); setEditing(false); }}>← Volver a órdenes de compra</button>
         <div className="page-header">
           <h3>{selectedLoan.loanType} — ${selectedLoan.amount} {selectedLoan.orderNumber ? `(N° ${selectedLoan.orderNumber})` : ""}</h3>
@@ -113,6 +152,15 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
             </button>
           )}
         </div>
+        {selectedLoan.signatureImage ? (
+          <p>
+            Firmada digitalmente por el asociado el {new Date(selectedLoan.signedAt).toLocaleString("es-AR")}.
+            <br />
+            <img src={selectedLoan.signatureImage} alt="Firma del asociado" style={{ maxHeight: 70, border: "1px solid #ccd", background: "#fff", marginTop: 4 }} />
+          </p>
+        ) : (
+          canSign && <p><button className="small-button" onClick={() => setSigning(selectedLoan)}>Firmar digitalmente</button></p>
+        )}
         <p>
           Fecha de la orden: {new Date(selectedLoan.grantedAt).toLocaleDateString("es-AR")}{" "}
           {canSetDate && !editing && (
@@ -176,6 +224,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
 
   return (
     <div>
+      {signUi}
       <div className="page-header">
         <h3>Órdenes de compra activas</h3>
         <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva orden de compra"}</button>

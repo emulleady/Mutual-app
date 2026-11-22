@@ -290,6 +290,16 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
     doc.fillColor("#000000");
   }
 
+  // Firma digital del asociado (tomada en pantalla), sobre la linea de "Firma Asociado/a".
+  if (loan.signatureImage && /^data:image\/png;base64,/.test(loan.signatureImage)) {
+    try {
+      const img = Buffer.from(loan.signatureImage.split(",")[1], "base64");
+      doc.image(img, 180, y - 52, { fit: [120, 48], align: "center", valign: "bottom" });
+    } catch {
+      /* si la imagen no se puede leer, la orden sale con la linea para firmar a mano */
+    }
+  }
+
   fieldLine(doc, "", "", 35, y, 0, 130);
   fieldLine(doc, "", "", 175, y, 0, 130);
   fieldLine(doc, "", "", 320, y, 0, 100);

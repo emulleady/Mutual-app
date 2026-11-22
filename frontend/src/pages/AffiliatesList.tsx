@@ -21,7 +21,7 @@ export default function AffiliatesList() {
   const [importResult, setImportResult] = useState<any | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<"normal" | "altas">("normal");
-  const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("");
+  const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("active");
   const [showFilters, setShowFilters] = useState(false);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<any>({});
