@@ -101,8 +101,8 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
 
   const isAdmin = localStorage.getItem("role") === "Administrador";
 
-  async function saveSignature(loan: any, image: string) {
-    await api.signLoan(loan.id, image);
+  async function saveSignature(loan: any, image: string, name: string, dni: string) {
+    await api.signLoan(loan.id, image, name, dni);
     setSigning(null);
     setAskSign(null);
     if (selectedLoan && selectedLoan.id === loan.id) setSelectedLoan(await api.getLoan(loan.id));
@@ -127,7 +127,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         <SignaturePad
           title={`Firma del asociado — Orden ${signing.orderNumber || signing.id}`}
           onCancel={() => { setSigning(null); setAskSign(null); }}
-          onConfirm={(img) => saveSignature(signing, img)}
+          onConfirm={(img, name, dni) => saveSignature(signing, img, name, dni)}
         />
       )}
     </>
@@ -154,7 +154,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         </div>
         {selectedLoan.signatureImage ? (
           <p>
-            Firmada digitalmente por el asociado el {new Date(selectedLoan.signedAt).toLocaleString("es-AR")}.
+            Firmada digitalmente por el asociado el {new Date(selectedLoan.signedAt).toLocaleString("es-AR")}{selectedLoan.signatureName ? ` — ${selectedLoan.signatureName}, DNI ${selectedLoan.signatureDni}` : ""}.
             <br />
             <img src={selectedLoan.signatureImage} alt="Firma del asociado" style={{ maxHeight: 70, border: "1px solid #ccd", background: "#fff", marginTop: 4 }} />
           </p>

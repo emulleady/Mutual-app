@@ -65,10 +65,11 @@ export async function computeLiquidacionData(companyId: number, month: string) {
   const company = await prisma.company.findUnique({ where: { id: companyId } });
   if (!company) return null;
 
-  const affiliates = await prisma.affiliate.findMany({
+  const allAffiliates = await prisma.affiliate.findMany({
     where: { companyId, status: "active" },
     orderBy: [{ lastName: "asc" }, { firstName: "asc" }],
     include: {
+      periods: { select: { startDate: true, endDate: true } },
       dependents: { where: { active: true }, orderBy: { id: "asc" }, include: { services: { where: { active: true }, include: { serviceType: true } } } },
       services: { where: { active: true }, include: { serviceType: true } },
       loans: {
@@ -84,6 +85,14 @@ export async function computeLiquidacionData(companyId: number, month: string) {
       },
     },
   });
+
+  // La cuota social se liquida desde el mes del alta: un asociado que se dio de
+  // alta despues del mes que se liquida (o que ya estaba de baja antes) no entra.
+  // Sin periodos cargados (datos viejos) se liquida siempre.
+  const affiliates = allAffiliates.filter((a: any) =>
+    !a.periods || a.periods.length === 0 ||
+    a.periods.some((p: any) => p.startDate < range.end && (!p.endDate || p.endDate >= range.start))
+  );
 
   // --- Datos: una "persona" con sus cuotas del mes ---
   // Cada asociado activo lleva: su cuota social, la de cada familiar con tipo
@@ -109,7 +118,7 @@ export async function computeLiquidacionData(companyId: number, month: string) {
 
   for (const a of affiliates) {
     const lines: Line[] = [];
-    const titularName = `${a.lastName}, ${a.firstName}`.toUpperCase();
+    const titularName = `${a.lastName} ${a.firstName}`.toUpperCase();
 
     // Cuota social del titular: sin tipo de socio cargado se toma como "Activo"
     // (igual que en la Orden de Compra). Un valor propio del asociado pisa el
@@ -209,7 +218,7 @@ export async function computeLiquidacionData(companyId: number, month: string) {
     if (lines.length === 0) continue;
     people.push({
       number: a.affiliateNumber,
-      name: `${a.lastName}, ${a.firstName}`.toUpperCase(),
+      name: `${a.lastName} ${a.firstName}`.toUpperCase(),
       dni: a.dni,
       medife: null,
       // "Total a descontar" SIN Medife (órdenes + cuotas sociales + servicios).

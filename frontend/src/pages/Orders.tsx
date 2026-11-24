@@ -31,7 +31,7 @@ export default function Orders() {
   function exportCsv() {
     const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`;
     const header = ["N° orden", "Fecha", "N° asociado", "Asociado", "DNI", "Empresa", "Comercio", "Importe", "Cuotas", "Valor cuota", "Pagadas", "Saldo", "Próx. vencimiento", "Estado"];
-    const rows = data.rows.map((r: any) => [r.orderNumber, date(r.grantedAt), r.affiliate.affiliateNumber, `${r.affiliate.lastName}, ${r.affiliate.firstName}`, r.affiliate.dni, r.affiliate.company?.name, r.comercio, r.amount, r.installmentsCount, r.installmentValue, r.paidCount, r.balance, date(r.nextDueDate), translate(loanStatusLabels, r.status)]);
+    const rows = data.rows.map((r: any) => [r.orderNumber, date(r.grantedAt), r.affiliate.affiliateNumber, `${r.affiliate.lastName} ${r.affiliate.firstName}`, r.affiliate.dni, r.affiliate.company?.name, r.comercio, r.amount, r.installmentsCount, r.installmentValue, r.paidCount, r.balance, date(r.nextDueDate), translate(loanStatusLabels, r.status)]);
     const csv = "﻿" + [header, ...rows].map((r: any[]) => r.map(esc).join(";")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
     const a = document.createElement("a");
@@ -98,7 +98,7 @@ export default function Orders() {
             <tr key={r.id} className="clickable-row" onClick={() => navigate(`/afiliados/${r.affiliate.id}`)}>
               <td>{r.orderNumber || r.id}</td>
               <td>{date(r.grantedAt)}</td>
-              <td>{r.affiliate.lastName}, {r.affiliate.firstName}<br /><small>{r.affiliate.affiliateNumber} · DNI {r.affiliate.dni}</small></td>
+              <td>{r.affiliate.lastName} {r.affiliate.firstName}<br /><small>{r.affiliate.affiliateNumber} · DNI {r.affiliate.dni}</small></td>
               <td>{r.affiliate.company?.name || "—"}</td>
               <td>{r.comercio}</td>
               <td>{money(r.amount)}</td>

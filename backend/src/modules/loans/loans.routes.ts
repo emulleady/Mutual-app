@@ -354,12 +354,17 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
 // como imagen PNG y sale en el PDF de la orden. Una vez firmada no se reemplaza.
 const signatureSchema = z.object({
   image: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La firma debe ser una imagen PNG").max(700_000),
+  name: z.string().trim().min(3, "Falta la aclaración").max(80),
+  dni: z.string().trim().min(5, "Falta el DNI o documento").max(20),
 });
 
 router.post("/:id/signature", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
   const parsed = signatureSchema.safeParse(req.body);
-  if (!parsed.success) return res.status(400).json({ error: "Firma inválida" });
+  if (!parsed.success) {
+    const first = Object.values(parsed.error.flatten().fieldErrors).flat()[0];
+    return res.status(400).json({ error: first || "Firma inválida" });
+  }
 
   const loan = await prisma.loan.findUnique({ where: { id } });
   if (!loan) return res.status(404).json({ error: "Orden de compra no encontrada" });
@@ -368,7 +373,7 @@ router.post("/:id/signature", requirePermission("affiliates.edit"), async (req: 
   const signedAt = new Date();
   await prisma.loan.update({
     where: { id },
-    data: { signatureImage: parsed.data.image, signedAt, signedByUserId: req.user?.id ?? null },
+    data: { signatureImage: parsed.data.image, signatureName: parsed.data.name, signatureDni: parsed.data.dni, signedAt, signedByUserId: req.user?.id ?? null },
   });
 
   await logAffiliateEvent({

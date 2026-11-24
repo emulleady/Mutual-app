@@ -475,7 +475,7 @@ export default function Inventory() {
             <>
               {selectedAffiliate ? (
                 <div className="note" style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <span>{selectedAffiliate.lastName}, {selectedAffiliate.firstName} (N° {selectedAffiliate.affiliateNumber})</span>
+                  <span>{selectedAffiliate.lastName} {selectedAffiliate.firstName} (N° {selectedAffiliate.affiliateNumber})</span>
                   <button type="button" className="small-button" onClick={() => setLoanForm({ ...loanForm, affiliateId: "", affiliateQuery: "" })}>
                     Cambiar
                   </button>
@@ -495,7 +495,7 @@ export default function Inventory() {
                           className="clickable-row"
                           onClick={() => setLoanForm({ ...loanForm, affiliateId: String(a.id), affiliateQuery: "" })}
                         >
-                          <span>{a.lastName}, {a.firstName}</span>
+                          <span>{a.lastName} {a.firstName}</span>
                           <span className="timeline-date">DNI {a.dni} — N° {a.affiliateNumber}</span>
                         </li>
                       ))}
@@ -547,7 +547,7 @@ export default function Inventory() {
             <tr key={l.id}>
               <td>{l.item?.name}</td>
               <td>{l.quantity}</td>
-              <td>{l.affiliate ? `${l.affiliate.lastName}, ${l.affiliate.firstName}` : l.borrowerName}</td>
+              <td>{l.affiliate ? `${l.affiliate.lastName} ${l.affiliate.firstName}` : l.borrowerName}</td>
               <td>{new Date(l.deliveredAt).toLocaleDateString("es-AR")}</td>
               <td>{l.returnedAt ? new Date(l.returnedAt).toLocaleDateString("es-AR") : "—"}</td>
               <td>{l.kmOut !== null && l.kmOut !== undefined ? l.kmOut.toLocaleString("es-AR") : "—"}</td>

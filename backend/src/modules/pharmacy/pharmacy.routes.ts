@@ -20,13 +20,16 @@ router.get("/lookup", requirePermission("pharmacy.view"), async (req, res) => {
     prisma.pharmacyDiscountSetting.findMany(),
     prisma.affiliate.findMany({
       where: {
-        OR: [
-          { dni: { contains: q } },
-          { affiliateNumber: { contains: q } },
-          { firstName: { contains: q, mode: "insensitive" } },
-          { lastName: { contains: q, mode: "insensitive" } },
-          { dependents: { some: { OR: [{ dni: { contains: q } }, { fullName: { contains: q, mode: "insensitive" } }] } } },
-        ],
+        // Cada palabra puede estar en cualquier dato: "romero hector" o "romero, hector".
+        AND: q.replace(/[,;]/g, " ").split(/\s+/).filter(Boolean).map((w) => ({
+          OR: [
+            { dni: { contains: w } },
+            { affiliateNumber: { contains: w } },
+            { firstName: { contains: w, mode: "insensitive" as const } },
+            { lastName: { contains: w, mode: "insensitive" as const } },
+            { dependents: { some: { OR: [{ dni: { contains: w } }, { fullName: { contains: w, mode: "insensitive" as const } }] } } },
+          ],
+        })),
       },
       take: 15,
       orderBy: { lastName: "asc" },
@@ -47,7 +50,7 @@ router.get("/lookup", requirePermission("pharmacy.view"), async (req, res) => {
       return {
         id: a.id,
         affiliateNumber: a.affiliateNumber,
-        name: `${a.lastName}, ${a.firstName}`,
+        name: `${a.lastName} ${a.firstName}`,
         dni: a.dni,
         socioType: titularType,
         active: titularActive,

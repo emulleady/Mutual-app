@@ -7,6 +7,7 @@ import { logAudit, logAffiliateEvent } from "../../middleware/audit";
 import { importAffiliatesFromExcel } from "./import";
 import { generateFichaAltaPdf, generateFichaFamiliaresPdf } from "./forms";
 import { buildLiquidacionWorkbook } from "./liquidacion";
+import { buildMedifeAltaWorkbook } from "./medifeAlta";
 
 function parseBodyDate(value: unknown): Date | null {
   if (typeof value !== "string" || !value) return null;
@@ -48,7 +49,22 @@ const affiliateSchema = z.object({
   socioType: z.string().optional().nullable(),
   feeAmount: z.number().optional().nullable(),
   medifeFee: z.number().nonnegative().optional().nullable(),
+  medifeSignedAt: z.string().datetime().optional().nullable(),
   membershipDate: z.string().datetime().optional().nullable(),
+});
+
+// Palabras de una busqueda: las comas y puntos y comas cuentan como espacios, asi
+// "Romero, Hector", "Romero Hector" y "hector romero" encuentran a la misma persona.
+const searchWords = (text: string) => text.replace(/[,;]/g, " ").split(/\s+/).filter(Boolean);
+
+// Resumen de altas de Medife del mes (modelo "ALTA OBRA SOCIAL").
+router.get("/reports/medife-alta", requirePermission("affiliates.view"), async (req, res) => {
+  const month = String(req.query.month || "");
+  const result = await buildMedifeAltaWorkbook(month);
+  if (!result) return res.status(400).json({ error: "Mes inválido (usar AAAA-MM)" });
+  res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+  res.setHeader("Content-Disposition", `attachment; filename="alta-medife-${month}.xlsx"`);
+  res.send(result.buffer);
 });
 
 // Buscador global: por DNI, numero de afiliado, nombre, apellido,
@@ -61,14 +77,16 @@ router.get("/search", async (req, res) => {
 
   const results = await prisma.affiliate.findMany({
     where: {
-      OR: [
-        { dni: { contains: q } },
-        { affiliateNumber: { contains: q } },
-        { firstName: { contains: q, mode: "insensitive" } },
-        { lastName: { contains: q, mode: "insensitive" } },
-        { phone: { contains: q } },
-        { email: { contains: q, mode: "insensitive" } },
-      ],
+      AND: searchWords(q).map((w) => ({
+        OR: [
+          { dni: { contains: w } },
+          { affiliateNumber: { contains: w } },
+          { firstName: { contains: w, mode: "insensitive" as const } },
+          { lastName: { contains: w, mode: "insensitive" as const } },
+          { phone: { contains: w } },
+          { email: { contains: w, mode: "insensitive" as const } },
+        ],
+      })),
     },
     take: 20,
     orderBy: { lastName: "asc" },
@@ -119,7 +137,7 @@ router.get("/", async (req, res) => {
   // Texto libre: número, nombre, apellido, DNI, CUIL, teléfono, email, domicilio.
   const text = (q.q || "").trim();
   if (text) {
-    const words = text.split(/\s+/);
+    const words = searchWords(text);
     for (const w of words) {
       and.push({
         OR: [
@@ -272,6 +290,7 @@ router.put("/:id", requirePermission("affiliates.edit"), async (req: Authenticat
       ...data,
       birthDate: data.birthDate ? new Date(data.birthDate) : undefined,
       membershipDate: data.membershipDate ? new Date(data.membershipDate) : undefined,
+      medifeSignedAt: data.medifeSignedAt ? new Date(data.medifeSignedAt) : data.medifeSignedAt === null ? null : undefined,
     },
   });
 
@@ -604,7 +623,8 @@ router.get("/:id/forms/alta", async (req, res) => {
     include: { company: true },
   });
   if (!affiliate) return res.status(404).json({ error: "Afiliado no encontrado" });
-  generateFichaAltaPdf(res, affiliate);
+  const dependents = await prisma.dependent.findMany({ where: { affiliateId: id, active: true }, orderBy: { fullName: "asc" } });
+  generateFichaAltaPdf(res, affiliate, dependents);
 });
 
 router.get("/:id/forms/familiares", async (req, res) => {

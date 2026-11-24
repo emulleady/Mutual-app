@@ -7,13 +7,15 @@ export default function SignaturePad({
   onCancel,
 }: {
   title: string;
-  onConfirm: (dataUrl: string) => Promise<void> | void;
+  onConfirm: (dataUrl: string, name: string, dni: string) => Promise<void> | void;
   onCancel: () => void;
 }) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
   const last = useRef<{ x: number; y: number } | null>(null);
   const [empty, setEmpty] = useState(true);
+  const [name, setName] = useState("");
+  const [dni, setDni] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -74,10 +76,14 @@ export default function SignaturePad({
 
   async function confirm() {
     if (empty) return;
+    if (name.trim().length < 3 || dni.trim().length < 5) {
+      setError("Escribí la aclaración (nombre y apellido) y el DNI o documento.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      await onConfirm(canvasRef.current!.toDataURL("image/png"));
+      await onConfirm(canvasRef.current!.toDataURL("image/png"), name.trim(), dni.trim());
     } catch (e: any) {
       setError(e.message || "No se pudo guardar la firma");
       setSaving(false);
@@ -103,6 +109,16 @@ export default function SignaturePad({
               Firmar acá
             </span>
           )}
+        </div>
+        <div style={{ display: "flex", gap: 12, marginTop: 12, flexWrap: "wrap" }}>
+          <label style={{ display: "flex", flexDirection: "column", fontSize: 13, gap: 2, flex: "2 1 260px" }}>
+            Aclaración (nombre y apellido)
+            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="off" style={{ fontSize: 16 }} />
+          </label>
+          <label style={{ display: "flex", flexDirection: "column", fontSize: 13, gap: 2, flex: "1 1 160px" }}>
+            DNI o documento
+            <input value={dni} onChange={(e) => setDni(e.target.value)} autoComplete="off" style={{ fontSize: 16 }} />
+          </label>
         </div>
         {error && <div className="error-box">{error}</div>}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", marginTop: 12, flexWrap: "wrap" }}>

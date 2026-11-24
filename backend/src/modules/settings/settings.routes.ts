@@ -127,7 +127,7 @@ async function dueDateChanges() {
       if (ym(to) !== ym(inst.dueDate)) {
         changes.push({
           installmentId: inst.id, loanId: loan.id, order: loan.orderNumber || String(loan.id),
-          affiliate: `${loan.affiliate.lastName}, ${loan.affiliate.firstName} (${loan.affiliate.affiliateNumber})`,
+          affiliate: `${loan.affiliate.lastName} ${loan.affiliate.firstName} (${loan.affiliate.affiliateNumber})`,
           cuota: `${inst.number}/${loan.installmentsCount}`, from: inst.dueDate, to,
         });
       }

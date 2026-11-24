@@ -123,6 +123,7 @@ model Affiliate {
   socioType      String?  // Tipo de Socio: Activo | Adherente | Participante | Honorario | No socio
   feeAmount      Float?   // Valor de cuota
   medifeFee      Float?   // Cuota de Medife (se informa en la liquidación a la empresa)
+  medifeSignedAt DateTime? // fecha en que firmó la cobertura Medife (resumen de altas)
   status         String   @default("active") // active | inactive | suspended
   branchId       Int?
   companyId      Int?     // empresa donde trabaja, para descuento por recibo de sueldo
@@ -206,6 +207,8 @@ model Loan {
   createdByUserId   Int?
   signatureImage    String?  // firma manuscrita del asociado (PNG en base64, data URL)
   signedAt          DateTime?
+  signatureName     String?  // aclaracion escrita por el asociado al firmar
+  signatureDni      String?  // DNI o documento escrito por el asociado al firmar
   signedByUserId    Int?     // usuario que tomo la firma en pantalla
   affiliate         Affiliate @relation(fields: [affiliateId], references: [id])
   installments      LoanInstallment[]

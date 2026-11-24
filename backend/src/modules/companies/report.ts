@@ -64,7 +64,7 @@ export async function buildCompanyReport(companyId: number): Promise<CompanyRepo
 
     rows.push({
       affiliateNumber: `${affiliate.affiliateNumber.split("/")[0]}/00`,
-      fullName: `${affiliate.lastName}, ${affiliate.firstName}`,
+      fullName: `${affiliate.lastName} ${affiliate.firstName}`,
       dni: affiliate.dni,
       parentesco: "Titular",
       status: statusLabels[affiliate.status] || affiliate.status,

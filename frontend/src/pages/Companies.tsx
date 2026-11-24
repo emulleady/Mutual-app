@@ -79,12 +79,12 @@ export default function Companies() {
   }
 
   const fold = (s: any) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  const term = fold(search.trim());
+  const terms = fold(search.replace(/[,;]/g, " ")).split(/\s+/).filter(Boolean);
   const visibleCompanies = companies.filter((c) => {
     if (statusFilter === "active" && !c.active) return false;
     if (statusFilter === "inactive" && c.active) return false;
-    if (!term) return true;
-    return [c.name, c.cuit, c.contactName, c.phone, c.email].some((v) => fold(v).includes(term));
+    const hay = fold([c.name, c.cuit, c.contactName, c.phone, c.email].join(" "));
+    return terms.every((t) => hay.includes(t));
   });
 
   if (selected) {
@@ -133,7 +133,7 @@ export default function Companies() {
             {selected.affiliates.map((a: any) => (
               <tr key={a.id} className="clickable-row" onClick={() => navigate(`/afiliados/${a.id}`)}>
                 <td>{a.affiliateNumber}</td>
-                <td>{a.lastName}, {a.firstName}</td>
+                <td>{a.lastName} {a.firstName}</td>
                 <td>{a.dni}</td>
                 <td><span className={`badge badge-${a.status}`}>{translate(affiliateStatusLabels, a.status)}</span></td>
               </tr>

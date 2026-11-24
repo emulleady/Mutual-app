@@ -23,6 +23,9 @@ export default function AffiliatesList() {
   const [viewMode, setViewMode] = useState<"normal" | "altas">("normal");
   const [statusFilter, setStatusFilter] = useState<"" | "active" | "inactive">("active");
   const [showFilters, setShowFilters] = useState(false);
+  const [medifeMonth, setMedifeMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [showMedife, setShowMedife] = useState(false);
+  const [medifeError, setMedifeError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Record<string, string>>({});
   const [options, setOptions] = useState<any>({});
   const navigate = useNavigate();
@@ -112,6 +115,7 @@ export default function AffiliatesList() {
             <option value="active">Activos</option>
             <option value="inactive">Inactivos</option>
           </select>
+          <button className="small-button" onClick={() => setShowMedife((v) => !v)}>Resumen Medife</button>
           <button className="small-button" onClick={() => setShowFilters((v) => !v)}>
             Filtros{activeFilterCount ? ` (${activeFilterCount})` : ""}
           </button>
@@ -216,6 +220,18 @@ export default function AffiliatesList() {
         </form>
       )}
 
+      {showMedife && (
+        <div className="card" style={{ padding: 12, margin: "8px 0", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <span>Altas de Medife del mes:</span>
+          <input type="month" value={medifeMonth} onChange={(e) => setMedifeMonth(e.target.value)} />
+          <button className="small-button" onClick={async () => {
+            setMedifeError(null);
+            try { await api.downloadMedifeAlta(medifeMonth); } catch (e: any) { setMedifeError(e.message || "No se pudo generar"); }
+          }}>Descargar Excel</button>
+          <span className="note">Incluye a los titulares con fecha de firma de cobertura Medife en ese mes y a sus familiares con obra social Medife.</span>
+          {medifeError && <span className="error-box">{medifeError}</span>}
+        </div>
+      )}
       <p className="note">{affiliates.length} asociado(s){statusFilter === "active" ? " activo(s)" : statusFilter === "inactive" ? " inactivo(s)" : ""}</p>
 
       <table className="data-table">
@@ -229,7 +245,7 @@ export default function AffiliatesList() {
           {affiliates.map((a) => (
             <tr key={a.id} className="clickable-row" onClick={() => navigate(`/afiliados/${a.id}`)}>
               <td>{a.affiliateNumber}</td>
-              <td>{a.lastName}, {a.firstName}</td>
+              <td>{a.lastName} {a.firstName}</td>
               <td>{a.dni}</td>
               <td>{a.company?.name || "—"}</td>
               <td>{a.socioType || "—"}</td>

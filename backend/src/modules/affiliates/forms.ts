@@ -123,6 +123,13 @@ export function drawCasaDpto(doc: PDFKit.PDFDocument, type: string | null | unde
   doc.text(`Piso: ${floorApt || ""}`, cx, y, { lineBreak: false });
 }
 
+// Fechas que son un dia calendario (nacimiento): se guardan a medianoche UTC, por
+// eso se muestran en UTC para no correrlas un dia hacia atras en Argentina.
+export function fmtDateOnly(d: Date | null | undefined) {
+  if (!d) return "";
+  return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "UTC" });
+}
+
 export function fmtDate(d: Date | null | undefined) {
   if (!d) return "";
   return new Date(d).toLocaleDateString("es-AR", { day: "2-digit", month: "2-digit", year: "numeric", timeZone: "America/Argentina/Buenos_Aires" });
@@ -130,7 +137,7 @@ export function fmtDate(d: Date | null | undefined) {
 
 // Genera la Ficha de Alta del titular, replicando el formulario en papel
 // (ajustado para entrar siempre en una sola hoja A4).
-export function generateFichaAltaPdf(res: Response, affiliate: any) {
+export function generateFichaAltaPdf(res: Response, affiliate: any, dependents: any[] = []) {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
     "Content-Disposition",
@@ -151,7 +158,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
   doc.fontSize(10).font("Helvetica-Bold").text("Datos del Asociado/a", 35, y, { underline: true });
   y += 18;
 
-  const fullName = `${affiliate.lastName}, ${affiliate.firstName}`;
+  const fullName = `${affiliate.lastName} ${affiliate.firstName}`;
   fieldLine(doc, "Nombre completo:", fullName, 35, y, 95, 525);
   y += 22;
 
@@ -159,7 +166,7 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
   fieldLine(doc, "N° de Asoc.:", affiliate.affiliateNumber || "", 310, y, 68, 250);
   y += 22;
 
-  fieldLine(doc, "Fecha de Nac.:", fmtDate(affiliate.birthDate), 35, y, 78, 255);
+  fieldLine(doc, "Fecha de Nac.:", fmtDateOnly(affiliate.birthDate), 35, y, 78, 255);
   fieldLine(doc, "Teléfono:", affiliate.phone || "", 310, y, 52, 250);
   y += 20;
 
@@ -235,35 +242,28 @@ export function generateFichaAltaPdf(res: Response, affiliate: any) {
   y = doc.y + 10;
 
   fieldLine(doc, "Solicito que tenga efecto a partir del día:", "", 35, y, 235, 480);
-  y += 22;
+  y += 70; // espacio para que el asociado firme
 
   fieldLine(doc, "Firma del Asociado:", "", 35, y, 100, 255);
   fieldLine(doc, "Aclaración:", "", 310, y, 60, 250);
 
   drawFooter(doc, 762);
 
+  // La ficha de alta sale junto con la ficha de los familiares activos (si tiene).
+  if (dependents.length > 0) drawFamiliaresSheets(doc, affiliate, dependents, true);
+
   doc.end();
 }
 
-// Genera la Ficha de Familiares (hasta 3 participantes por hoja); si hay
-// más de 3, se agregan hojas adicionales.
-export function generateFichaFamiliaresPdf(res: Response, affiliate: any, dependents: any[]) {
-  res.setHeader("Content-Type", "application/pdf");
-  res.setHeader(
-    "Content-Disposition",
-    `attachment; filename="ficha-familiares-${affiliate.lastName}-${affiliate.firstName}.pdf"`
-  );
-
-  const doc = new PDFDocument({ margin: 35, size: "A4" });
-  doc.pipe(res);
-
+// Dibuja las hojas de familiares (hasta 3 por hoja) en un documento ya abierto.
+function drawFamiliaresSheets(doc: PDFKit.PDFDocument, affiliate: any, dependents: any[], newPageFirst: boolean) {
   const chunks: any[][] = [];
   for (let i = 0; i < Math.max(dependents.length, 1); i += 3) {
     chunks.push(dependents.slice(i, i + 3));
   }
 
   chunks.forEach((group, pageIndex) => {
-    if (pageIndex > 0) doc.addPage();
+    if (pageIndex > 0 || newPageFirst) doc.addPage();
     drawLetterhead(doc);
 
     let y = 118;
@@ -282,7 +282,7 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
       y += 19;
 
       fieldLine(doc, "C.U.I.L.:", dep?.cuil || "", 35, y, 50, 155);
-      fieldLine(doc, "Fecha Nac.:", fmtDate(dep?.birthDate), 200, y, 62, 145);
+      fieldLine(doc, "Fecha Nac.:", fmtDateOnly(dep?.birthDate), 200, y, 62, 145);
       fieldLine(doc, "N° Asoc.:", dep?.dependentNumber || "", 385, y, 55, 175);
       y += 19;
 
@@ -312,6 +312,21 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
 
     drawFooter(doc, 760);
   });
+}
+
+// Genera la Ficha de Familiares (hasta 3 participantes por hoja); si hay
+// más de 3, se agregan hojas adicionales.
+export function generateFichaFamiliaresPdf(res: Response, affiliate: any, dependents: any[]) {
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader(
+    "Content-Disposition",
+    `attachment; filename="ficha-familiares-${affiliate.lastName}-${affiliate.firstName}.pdf"`
+  );
+
+  const doc = new PDFDocument({ margin: 35, size: "A4" });
+  doc.pipe(res);
+
+  drawFamiliaresSheets(doc, affiliate, dependents, false);
 
   // ---- Ultima hoja: ACTUALIZACION DE DATOS del asociado titular ----
   // Se imprime siempre despues de las hojas de participantes, con los datos
@@ -331,7 +346,7 @@ export function generateFichaFamiliaresPdf(res: Response, affiliate: any, depend
   fieldLine(doc, "C.U.I.L.:", affiliate.cuil || "", 35, y2, 50, 285);
   fieldLine(doc, "N° de Asoc.:", titularNumber, 340, y2, 68, 220);
   y2 += 22;
-  fieldLine(doc, "Fecha de Nac.:", fmtDate(affiliate.birthDate), 35, y2, 78, 255);
+  fieldLine(doc, "Fecha de Nac.:", fmtDateOnly(affiliate.birthDate), 35, y2, 78, 255);
   fieldLine(doc, "Teléfono de contacto:", affiliate.phone || "", 310, y2, 110, 250);
   y2 += 22;
   fieldLine(doc, "Domicilio:", affiliate.address || "", 35, y2, 60, 255);

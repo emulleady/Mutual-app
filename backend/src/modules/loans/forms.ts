@@ -93,7 +93,7 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
   const doc = new PDFDocument({ margin: 20, size: "A4" });
   doc.pipe(res);
 
-  const fullNameNormal = `${affiliate.lastName}, ${affiliate.firstName}`;
+  const fullNameNormal = `${affiliate.lastName} ${affiliate.firstName}`;
   const fullNameUpper = `${affiliate.lastName} ${affiliate.firstName}`.toUpperCase();
   const orderNumber = loan.orderNumber || "";
   // El número ya puede venir con sufijo ("36909756/00"): se normaliza para no duplicarlo.
@@ -298,6 +298,14 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
     } catch {
       /* si la imagen no se puede leer, la orden sale con la linea para firmar a mano */
     }
+  }
+
+  // Aclaracion y DNI escritos por el asociado al firmar en pantalla.
+  if (loan.signatureName || loan.signatureDni) {
+    doc.save().fillColor("#000000").font("Helvetica").fontSize(9);
+    if (loan.signatureName) doc.text(String(loan.signatureName), 320, y - 13, { width: 105, align: "center", lineBreak: false, ellipsis: true });
+    if (loan.signatureDni) doc.text(String(loan.signatureDni), 430, y - 13, { width: 100, align: "center", lineBreak: false, ellipsis: true });
+    doc.restore();
   }
 
   fieldLine(doc, "", "", 35, y, 0, 130);

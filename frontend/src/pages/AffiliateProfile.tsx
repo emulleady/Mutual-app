@@ -6,10 +6,18 @@ import { api } from "../api/client";
 import LoanPanel from "../components/LoanPanel";
 import { affiliateStatusLabels, translate } from "../utils/labels";
 
+// La fecha de nacimiento es un dia calendario guardado a medianoche UTC: se muestra en UTC
+// para que no se corra un dia hacia atras (Argentina es UTC-3).
+const fmtDateOnly = (v: any) => (v ? new Date(v).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "—");
+// La cobertura es un numero (porcentaje). Los valores viejos con texto se muestran como estan.
+const fmtCoverage = (v: any) => (v == null || v === "" ? "—" : isNaN(Number(v)) ? String(v) : `${Number(v)}%`);
+const numericOrEmpty = (v: any) => (v != null && v !== "" && !isNaN(Number(v)) ? String(v) : "");
+
 type Tab = "resumen" | "datos" | "prestamos" | "familiares" | "historial";
 
 const EMPTY_DEP_FORM = {
   fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", medifeFee: "", birthDate: "",
+  healthProvider: "", coveragePercentage: "",
   address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
 };
 
@@ -25,10 +33,7 @@ export default function AffiliateProfile() {
   const [error, setError] = useState<string | null>(null);
   const [companies, setCompanies] = useState<any[]>([]);
   const [showDependentForm, setShowDependentForm] = useState(false);
-  const [dependentForm, setDependentForm] = useState({
-    fullName: "", dni: "", cuil: "", dependentNumber: "", parentesco: "Cónyuge", parentescoOtro: "", socioType: "", medifeFee: "", birthDate: "",
-    address: "", addressNumber: "", addressType: "", floorApt: "", locality: "", province: "", phone: "", email: "",
-  });
+  const [dependentForm, setDependentForm] = useState({ ...EMPTY_DEP_FORM });
   const [editingDepId, setEditingDepId] = useState<number | null>(null);
   const [dependentError, setDependentError] = useState<string | null>(null);
   const [membershipFees, setMembershipFees] = useState<any[]>([]);
@@ -75,10 +80,11 @@ export default function AffiliateProfile() {
       yacimiento: affiliate.yacimiento || "",
       puesto: affiliate.puesto || "",
       healthProvider: affiliate.healthProvider || "",
-      coveragePercentage: affiliate.coveragePercentage || "",
+      coveragePercentage: numericOrEmpty(affiliate.coveragePercentage),
       socioType: affiliate.socioType || "",
       feeAmount: affiliate.feeAmount != null ? String(affiliate.feeAmount) : "",
       medifeFee: affiliate.medifeFee != null ? String(affiliate.medifeFee) : "",
+      medifeSignedAt: affiliate.medifeSignedAt ? String(affiliate.medifeSignedAt).slice(0, 10) : "",
       membershipDate: (affiliate.membershipDate || affiliate.createdAt)
         ? (affiliate.membershipDate || affiliate.createdAt).slice(0, 10)
         : "",
@@ -98,6 +104,7 @@ export default function AffiliateProfile() {
         companyId: form.companyId ? Number(form.companyId) : null,
         feeAmount: form.feeAmount ? Number(form.feeAmount) : null,
         medifeFee: form.medifeFee ? Number(form.medifeFee) : null,
+        medifeSignedAt: form.medifeSignedAt ? new Date(form.medifeSignedAt).toISOString() : null,
       });
       setEditing(false);
       load();
@@ -168,6 +175,8 @@ export default function AffiliateProfile() {
         socioType: dependentForm.socioType || null,
         medifeFee: dependentForm.medifeFee ? Number(dependentForm.medifeFee) : null,
         birthDate: dependentForm.birthDate ? new Date(dependentForm.birthDate).toISOString() : null,
+        healthProvider: dependentForm.healthProvider || null,
+        coveragePercentage: dependentForm.coveragePercentage || null,
         address: dependentForm.address || null,
         addressNumber: dependentForm.addressNumber || null,
         addressType: dependentForm.addressType || null,
@@ -201,6 +210,8 @@ export default function AffiliateProfile() {
       socioType: d.socioType || "",
       medifeFee: d.medifeFee != null ? String(d.medifeFee) : "",
       birthDate: d.birthDate ? String(d.birthDate).slice(0, 10) : "",
+      healthProvider: d.healthProvider || "",
+      coveragePercentage: numericOrEmpty(d.coveragePercentage),
       address: d.address || "",
       addressNumber: d.addressNumber || "",
       addressType: d.addressType || "",
@@ -231,7 +242,7 @@ export default function AffiliateProfile() {
     <div>
       <div className="affiliate-header">
         <div>
-          <h1>{affiliate.lastName}, {affiliate.firstName}</h1>
+          <h1>{affiliate.lastName} {affiliate.firstName}</h1>
           <p>DNI: {affiliate.dni} — N° de asociado: {affiliate.affiliateNumber}</p>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
@@ -295,7 +306,7 @@ export default function AffiliateProfile() {
           <p>Sucursal: {affiliate.branch?.name || "—"}</p>
           <p>Empresa donde trabaja: {affiliate.company?.name || "—"}</p>
           <p>Yacimiento: {affiliate.yacimiento || "—"} — Puesto: {affiliate.puesto || "—"}</p>
-          <p>Obra social: {affiliate.healthProvider || "—"} ({affiliate.coveragePercentage || "—"})</p>
+          <p>Obra social: {affiliate.healthProvider || "—"} ({fmtCoverage(affiliate.coveragePercentage)})</p>
           <p>Familiares a cargo: {affiliate.dependents?.length ?? 0}</p>
           <p>Asociado desde: {new Date(affiliate.membershipDate || affiliate.createdAt).toLocaleDateString("es-AR")}</p>
           <p className="note">
@@ -315,10 +326,11 @@ export default function AffiliateProfile() {
                 <dt>DNI</dt><dd>{affiliate.dni}</dd>
                 <dt>CUIL</dt><dd>{affiliate.cuil || "—"}</dd>
                 <dt>Fecha de nacimiento</dt>
-                <dd>{affiliate.birthDate ? new Date(affiliate.birthDate).toLocaleDateString("es-AR") : "—"}</dd>
+                <dd>{fmtDateOnly(affiliate.birthDate)}</dd>
                 <dt>Dirección</dt><dd>{affiliate.address || "—"} {affiliate.addressNumber ? `N° ${affiliate.addressNumber}` : ""} {affiliate.addressType ? `(${affiliate.addressType})` : ""} {affiliate.floorApt ? `- Piso ${affiliate.floorApt}` : ""}</dd>
                 <dt>Tipo de socio</dt><dd>{affiliate.socioType || "—"}</dd>
                 <dt>Valor de cuota</dt><dd>{affiliate.feeAmount != null ? `$${affiliate.feeAmount.toLocaleString("es-AR")}` : "—"}</dd>
+                <dt>Firma cobertura Medife</dt><dd>{affiliate.medifeSignedAt ? new Date(affiliate.medifeSignedAt).toLocaleDateString("es-AR", { timeZone: "UTC" }) : "—"}</dd>
                 <dt>Cuota Medife</dt><dd>{affiliate.medifeFee != null ? `$${affiliate.medifeFee.toLocaleString("es-AR")}` : "—"}</dd>
                 <dt>Localidad</dt><dd>{affiliate.locality || "—"}, {affiliate.province || "—"}</dd>
                 <dt>Teléfono</dt><dd>{affiliate.phone || "—"}</dd>
@@ -326,7 +338,7 @@ export default function AffiliateProfile() {
                 <dt>Empresa</dt><dd>{affiliate.company?.name || "—"}</dd>
                 <dt>Yacimiento</dt><dd>{affiliate.yacimiento || "—"}</dd>
                 <dt>Puesto</dt><dd>{affiliate.puesto || "—"}</dd>
-                <dt>Obra social</dt><dd>{affiliate.healthProvider || "—"} ({affiliate.coveragePercentage || "—"})</dd>
+                <dt>Obra social</dt><dd>{affiliate.healthProvider || "—"} ({fmtCoverage(affiliate.coveragePercentage)})</dd>
                 <dt>Fecha de Asociación</dt>
                 <dd>{new Date(affiliate.membershipDate || affiliate.createdAt).toLocaleDateString("es-AR")}</dd>
               </dl>
@@ -383,8 +395,9 @@ export default function AffiliateProfile() {
               <input value={form.puesto} onChange={(e) => setForm({ ...form, puesto: e.target.value })} />
               <label>Obra social</label>
               <input value={form.healthProvider} onChange={(e) => setForm({ ...form, healthProvider: e.target.value })} />
-              <label>Cobertura (Al 100% - 60%)</label>
-              <input value={form.coveragePercentage} onChange={(e) => setForm({ ...form, coveragePercentage: e.target.value })} />
+              <label>Cobertura (%)</label>
+              <input type="number" min="0" max="100" step="0.01" placeholder="Ej: 100" value={form.coveragePercentage}
+                onChange={(e) => setForm({ ...form, coveragePercentage: e.target.value })} />
               <label>Tipo de socio</label>
               <select value={form.socioType} onChange={(e) => handleSocioTypeChange(e.target.value)}>
                 <option value="">Sin especificar</option>
@@ -399,6 +412,8 @@ export default function AffiliateProfile() {
               <input type="number" step="0.01" value={form.feeAmount} onChange={(e) => setForm({ ...form, feeAmount: e.target.value })} />
               <label>Cuota Medife (va en la columna MEDIFE de la liquidación)</label>
               <input type="number" step="0.01" min="0" value={form.medifeFee ?? ""} onChange={(e) => setForm({ ...form, medifeFee: e.target.value })} />
+              <label>Fecha de firma de cobertura Medife</label>
+              <input type="date" value={form.medifeSignedAt ?? ""} onChange={(e) => setForm({ ...form, medifeSignedAt: e.target.value })} />
               {error && <div className="error-box">{error}</div>}
               <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
                 <button type="submit">Guardar cambios</button>
@@ -465,6 +480,10 @@ export default function AffiliateProfile() {
                 onChange={(e) => setDependentForm({ ...dependentForm, medifeFee: e.target.value })} />
               <input type="date" value={dependentForm.birthDate}
                 onChange={(e) => setDependentForm({ ...dependentForm, birthDate: e.target.value })} />
+              <input placeholder="Obra social" value={dependentForm.healthProvider}
+                onChange={(e) => setDependentForm({ ...dependentForm, healthProvider: e.target.value })} />
+              <input type="number" min="0" max="100" step="0.01" placeholder="Cobertura (%)" value={dependentForm.coveragePercentage}
+                onChange={(e) => setDependentForm({ ...dependentForm, coveragePercentage: e.target.value })} />
               <input placeholder="CUIL" value={dependentForm.cuil}
                 onChange={(e) => setDependentForm({ ...dependentForm, cuil: e.target.value })} />
               <input placeholder="Domicilio (calle)" value={dependentForm.address}
@@ -526,7 +545,7 @@ export default function AffiliateProfile() {
                   </td>
                   <td>{d.dni || "—"}</td>
                   <td>{d.healthProvider || "—"}</td>
-                  <td>{d.coveragePercentage || "—"}</td>
+                  <td>{fmtCoverage(d.coveragePercentage)}</td>
                   <td>{d.active === false ? "De baja" : "Activo"}</td>
                   <td style={{ whiteSpace: "nowrap" }}>
                     <button className="small-button" onClick={() => startEditDependent(d)}>Editar</button>{" "}

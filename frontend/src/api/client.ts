@@ -108,8 +108,8 @@ export const api = {
     request("/loans/payments", { method: "POST", body: JSON.stringify(data) }),
   downloadOrdenCompra: (loanId: number, orderNumber: string) =>
     downloadFile(`/loans/${loanId}/forms/orden-compra`, `orden-compra-${orderNumber}.pdf`),
-  signLoan: (loanId: number, image: string) =>
-    request(`/loans/${loanId}/signature`, { method: "POST", body: JSON.stringify({ image }) }),
+  signLoan: (loanId: number, image: string, name: string, dni: string) =>
+    request(`/loans/${loanId}/signature`, { method: "POST", body: JSON.stringify({ image, name, dni }) }),
   deleteLoan: (loanId: number) => request(`/loans/${loanId}`, { method: "DELETE" }),
   getInterestRates: () => request("/settings/interest-rate"),
   setInterestRate: (data: unknown) =>
@@ -224,6 +224,7 @@ export const api = {
     request(`/affiliates/${affiliateId}/dependents/${depId}`, { method: "PUT", body: JSON.stringify(data) }),
   createDependent: (affiliateId: number, data: unknown) =>
     request(`/affiliates/${affiliateId}/dependents`, { method: "POST", body: JSON.stringify(data) }),
+  downloadMedifeAlta: (month: string) => downloadFile(`/affiliates/reports/medife-alta?month=${month}`, `alta-medife-${month}.xlsx`),
   downloadFichaAlta: (affiliateId: number, name: string) =>
     downloadFile(`/affiliates/${affiliateId}/forms/alta`, `ficha-alta-${name}.pdf`),
   downloadFichaFamiliares: (affiliateId: number, name: string) =>

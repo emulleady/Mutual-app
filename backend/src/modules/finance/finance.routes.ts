@@ -444,7 +444,7 @@ router.get("/collections/overdue", async (req, res) => {
     installmentId: i.id,
     companyName: i.loan.affiliate.company?.name || "Sin empresa",
     affiliateId: i.loan.affiliate.id,
-    affiliate: `${i.loan.affiliate.lastName}, ${i.loan.affiliate.firstName}`,
+    affiliate: `${i.loan.affiliate.lastName} ${i.loan.affiliate.firstName}`,
     affiliateNumber: i.loan.affiliate.affiliateNumber,
     orderNumber: i.loan.orderNumber,
     installment: `${i.number}/${i.loan.installmentsCount}`,

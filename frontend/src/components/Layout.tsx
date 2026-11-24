@@ -73,7 +73,7 @@ export default function Layout({
         >
           <span className="search-result-name">Orden {o.orderNumber}</span>
           <span className="search-result-meta">
-            <span>{o.affiliate.lastName}, {o.affiliate.firstName}</span>
+            <span>{o.affiliate.lastName} {o.affiliate.firstName}</span>
             <span>{new Date(o.grantedAt).toLocaleDateString("es-AR")}</span>
           </span>
         </div>
@@ -115,7 +115,7 @@ export default function Layout({
                     navigate(`/afiliados/${r.id}`);
                   }}
                 >
-                  <span className="search-result-name">{r.lastName}, {r.firstName}</span>
+                  <span className="search-result-name">{r.lastName} {r.firstName}</span>
                   <span className="search-result-meta">
                     <span>DNI {r.dni}</span>
                     <span>N° {r.affiliateNumber}</span>
@@ -155,7 +155,7 @@ export default function Layout({
                 navigate(`/afiliados/${r.id}`);
               }}
             >
-              <strong>{r.lastName}, {r.firstName}</strong> — DNI {r.dni} — N° {r.affiliateNumber}
+              <strong>{r.lastName} {r.firstName}</strong> — DNI {r.dni} — N° {r.affiliateNumber}
             </div>
           ))}
         </div>
