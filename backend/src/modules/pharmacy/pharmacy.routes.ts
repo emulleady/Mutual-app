@@ -33,7 +33,7 @@ router.get("/lookup", requirePermission("pharmacy.view"), async (req, res) => {
       },
       take: 15,
       orderBy: { lastName: "asc" },
-      include: { dependents: { orderBy: { id: "asc" } } },
+      include: { company: true, dependents: { orderBy: { id: "asc" } } },
     }),
   ]);
 
@@ -53,6 +53,9 @@ router.get("/lookup", requirePermission("pharmacy.view"), async (req, res) => {
         name: `${a.lastName} ${a.firstName}`,
         dni: a.dni,
         socioType: titularType,
+        company: a.company?.name || null,
+        healthProvider: a.healthProvider || null,
+        coverage: a.coveragePercentage ?? null,
         active: titularActive,
         discount: titularActive ? discountFor(titularType) : null,
         dependents: a.dependents.map((d: any) => {
@@ -67,6 +70,8 @@ router.get("/lookup", requirePermission("pharmacy.view"), async (req, res) => {
             dni: d.dni,
             parentesco: d.parentesco,
             socioType: type,
+            healthProvider: d.healthProvider || null,
+            coverage: d.coveragePercentage ?? null,
             active,
             discount: active ? discountFor(type) : null,
           };

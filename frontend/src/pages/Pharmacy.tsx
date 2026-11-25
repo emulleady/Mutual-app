@@ -26,6 +26,14 @@ function DiscountCell({ active, discount }: { active: boolean; discount: Discoun
   );
 }
 
+// La cobertura es un porcentaje; si viene como 1 o 0,6 se interpreta como fraccion.
+function fmtCoverage(v: any) {
+  if (v == null || v === "") return "—";
+  const n = Number(String(v).replace(",", "."));
+  if (isNaN(n)) return String(v);
+  return `${n <= 1 ? Math.round(n * 100) : n}%`;
+}
+
 export default function Pharmacy() {
   const [q, setQ] = useState("");
   const [results, setResults] = useState<any[] | null>(null);
@@ -73,6 +81,9 @@ export default function Pharmacy() {
             <div>
               <h2 style={{ margin: 0 }}>{a.name}</h2>
               <div className="note">DNI {a.dni} · N° {a.affiliateNumber} · {a.socioType}</div>
+              <div className="note">
+                Empresa: <b>{a.company || "—"}</b> · Obra social: <b>{a.healthProvider || "—"}</b> · Cobertura: <b>{fmtCoverage(a.coverage)}</b>
+              </div>
             </div>
             <StatusBadge active={a.active} />
           </div>
@@ -80,13 +91,15 @@ export default function Pharmacy() {
 
           {a.dependents.length > 0 && (
             <table className="data-table">
-              <thead><tr><th>Familiar</th><th>Parentesco</th><th>DNI</th><th>Estado</th><th>Descuento</th></tr></thead>
+              <thead><tr><th>Familiar</th><th>Parentesco</th><th>DNI</th><th>Obra social</th><th>Cobertura</th><th>Estado</th><th>Descuento</th></tr></thead>
               <tbody>
                 {a.dependents.map((d: any) => (
                   <tr key={d.id}>
                     <td>{d.name}</td>
                     <td>{d.parentesco}</td>
                     <td>{d.dni || "—"}</td>
+                    <td>{d.healthProvider || "—"}</td>
+                    <td>{fmtCoverage(d.coverage)}</td>
                     <td><StatusBadge active={d.active} /></td>
                     <td><DiscountCell active={d.active} discount={d.discount} /></td>
                   </tr>
