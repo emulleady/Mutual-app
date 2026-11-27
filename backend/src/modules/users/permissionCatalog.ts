@@ -24,6 +24,9 @@ export const ALL_PERMISSION_KEYS = [
   "finance.view",
   "settings.view",
   "pharmacy.view",
+  "orders.create",
+  "orders.pay",
+  "orders.sign",
 ];
 
 export async function ensurePermissionsExist(): Promise<void> {
@@ -43,6 +46,17 @@ export async function ensurePermissionsExist(): Promise<void> {
           if (!/farmacia/i.test(role.name)) continue;
           await prisma.rolePermission.create({ data: { roleId: role.id, permissionId: created.id } });
           if (aff) await prisma.rolePermission.deleteMany({ where: { roleId: role.id, permissionId: aff.id } });
+        }
+      }
+      if (key === "orders.create" || key === "orders.pay" || key === "orders.sign") {
+        // Permisos nuevos que se desprenden de "Editar asociados": los roles que ya podian
+        // editar asociados siguen pudiendo cargar, cobrar y firmar ordenes, como hasta ahora.
+        const editPerm = await prisma.permission.findUnique({ where: { key: "affiliates.edit" } });
+        if (editPerm) {
+          const withEdit = await prisma.rolePermission.findMany({ where: { permissionId: editPerm.id } });
+          for (const rp of withEdit) {
+            await prisma.rolePermission.create({ data: { roleId: rp.roleId, permissionId: created.id } });
+          }
         }
       }
       if (key === "orders.view") {

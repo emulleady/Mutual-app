@@ -215,7 +215,7 @@ router.get("/:id", requirePermission("orders.view"), async (req, res) => {
 
 // Alta de un prestamo: genera automaticamente el plan de cuotas
 // (una fila por cuota, con su fecha de vencimiento mensual).
-router.post("/", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+router.post("/", requirePermission("orders.create"), async (req: AuthenticatedRequest, res) => {
   const parsed = loanSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -293,7 +293,7 @@ router.post("/", requirePermission("affiliates.edit"), async (req: Authenticated
 // Registrar un pago sobre una cuota puntual.
 const paymentSchema = z.object({ loanInstallmentId: z.number(), amount: z.number().positive() });
 
-router.post("/payments", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+router.post("/payments", requirePermission("orders.pay"), async (req: AuthenticatedRequest, res) => {
   const parsed = paymentSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });
 
@@ -354,11 +354,9 @@ router.post("/payments", requirePermission("affiliates.edit"), async (req: Authe
 // como imagen PNG y sale en el PDF de la orden. Una vez firmada no se reemplaza.
 const signatureSchema = z.object({
   image: z.string().regex(/^data:image\/png;base64,[A-Za-z0-9+/=]+$/, "La firma debe ser una imagen PNG").max(700_000),
-  name: z.string().trim().min(3, "Falta la aclaración").max(80),
-  dni: z.string().trim().min(5, "Falta el DNI o documento").max(20),
 });
 
-router.post("/:id/signature", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+router.post("/:id/signature", requirePermission("orders.sign"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
   const parsed = signatureSchema.safeParse(req.body);
   if (!parsed.success) {
@@ -373,7 +371,7 @@ router.post("/:id/signature", requirePermission("affiliates.edit"), async (req: 
   const signedAt = new Date();
   await prisma.loan.update({
     where: { id },
-    data: { signatureImage: parsed.data.image, signatureName: parsed.data.name, signatureDni: parsed.data.dni, signedAt, signedByUserId: req.user?.id ?? null },
+    data: { signatureImage: parsed.data.image, signedAt, signedByUserId: req.user?.id ?? null },
   });
 
   await logAffiliateEvent({
@@ -423,7 +421,7 @@ const editLoanSchema = z.object({
   orderNumber: z.string().trim().min(1).optional(),
 });
 
-router.put("/:id", requirePermission("affiliates.edit"), async (req: AuthenticatedRequest, res) => {
+router.put("/:id", requirePermission("orders.setDate"), async (req: AuthenticatedRequest, res) => {
   const id = Number(req.params.id);
   const parsed = editLoanSchema.safeParse(req.body);
   if (!parsed.success) return res.status(400).json({ error: parsed.error.flatten() });

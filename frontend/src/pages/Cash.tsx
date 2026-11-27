@@ -103,6 +103,24 @@ export default function Cash() {
     }
   }
 
+  // Suma comprobantes a un movimiento que ya existe (hasta 5 en total).
+  async function addAttachments(m: any, picked: File[]) {
+    if (picked.length === 0) return;
+    setError(null);
+    const room = 5 - m.attachments.length;
+    const failed: string[] = [];
+    for (const f of picked.slice(0, room)) {
+      try {
+        await api.uploadMovementAttachment(m.id, f);
+      } catch (err: any) {
+        failed.push(`${f.name}: ${err.message}`);
+      }
+    }
+    if (picked.length > room) failed.push(`Solo entran ${room} más (máximo 5 por movimiento)`);
+    if (failed.length > 0) setError(failed.join("; "));
+    load();
+  }
+
   async function handleVoid(m: any) {
     const reason = window.prompt(`Motivo para anular "${m.concept}" (${money(m.amount)}):`);
     if (!reason || !reason.trim()) return;
@@ -236,6 +254,8 @@ export default function Cash() {
         </div>
       )}
 
+      {!showForm && error && <div className="error-box">{error}</div>}
+
       {showForm && (
         <form className="inline-form" onSubmit={handleSubmit} style={{ marginBottom: 16 }}>
           <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value, categoryId: "" })}>
@@ -254,10 +274,32 @@ export default function Cash() {
           </select>
           <input placeholder="Nota (opcional)" value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
           <label>
-            Comprobante (foto o PDF, hasta 5)
+            Comprobantes (fotos o PDF, hasta 5). Podés elegir varios o ir agregando de a uno.
             <input type="file" multiple accept="image/jpeg,image/png,image/webp,application/pdf"
-              onChange={(e) => setFiles(Array.from(e.target.files || []).slice(0, 5))} />
+              onChange={(e) => {
+                const picked = Array.from(e.target.files || []);
+                setFiles((prev) => {
+                  const all = [...prev];
+                  for (const f of picked) {
+                    if (!all.some((x) => x.name === f.name && x.size === f.size)) all.push(f);
+                  }
+                  return all.slice(0, 5);
+                });
+                e.target.value = ""; // permite volver a elegir y seguir sumando
+              }} />
           </label>
+          {files.length > 0 && (
+            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+              {files.map((f, i) => (
+                <span key={`${f.name}-${i}`} className="badge badge-active" style={{ display: "inline-flex", gap: 6, alignItems: "center" }}>
+                  {f.name.length > 24 ? `${f.name.slice(0, 21)}…` : f.name}
+                  <button type="button" className="link-button-dark" aria-label={`Quitar ${f.name}`}
+                    onClick={() => setFiles((prev) => prev.filter((_, j) => j !== i))}>✕</button>
+                </span>
+              ))}
+              <span className="note">{files.length} de 5</span>
+            </div>
+          )}
           {error && <div className="error-box">{error}</div>}
           <button type="submit" disabled={saving}>{saving ? "Guardando…" : "Guardar movimiento"}</button>
         </form>
@@ -306,6 +348,13 @@ export default function Cash() {
                     {a.fileName.length > 18 ? `${a.fileName.slice(0, 15)}…` : a.fileName}
                   </button>
                 ))}
+                {canManage && m.attachments.length < 5 && (
+                  <label className="small-button" style={{ cursor: "pointer", display: "inline-block", marginTop: 4 }}>
+                    + Comprobante
+                    <input type="file" multiple hidden accept="image/jpeg,image/png,image/webp,application/pdf"
+                      onChange={(e) => addAttachments(m, Array.from(e.target.files || []))} />
+                  </label>
+                )}
               </td>
               <td>
                 {canManage && !m.voided && m.source === "manual" && <button className="small-button" onClick={() => handleVoid(m)}>Anular</button>}

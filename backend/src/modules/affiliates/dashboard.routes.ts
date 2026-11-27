@@ -1,13 +1,17 @@
 import { Router } from "express";
 import { prisma } from "../../db";
-import { requireAuth } from "../../middleware/auth";
+import { AuthenticatedRequest, requireAuth } from "../../middleware/auth";
 
 const router = Router();
 router.use(requireAuth);
 
 // Indicadores generales del dashboard (punto 3 del brief).
 // En etapas siguientes se suman los indicadores de prestamos/servicios/beneficios.
-router.get("/", async (_req, res) => {
+router.get("/", async (req: AuthenticatedRequest, res) => {
+  // El Resumen lo ven solo los administradores.
+  if (req.user?.roleName !== "Administrador") {
+    return res.status(403).json({ error: "El resumen es solo para administradores" });
+  }
   const [totalAffiliates, activeAffiliates, inactiveAffiliates] = await Promise.all([
     prisma.affiliate.count(),
     prisma.affiliate.count({ where: { status: "active" } }),

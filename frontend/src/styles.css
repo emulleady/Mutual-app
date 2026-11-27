@@ -170,8 +170,48 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .side-banner-shortcuts a:hover { text-decoration: underline; }
 .side-banner svg { flex-shrink: 0; color: var(--teal-bright); }
+.side-banner-contact {
+  margin-top: auto; width: 100%; padding-top: 12px; border-top: 1px solid var(--line);
+  display: flex; flex-direction: column; gap: 2px; text-align: center; font-size: 11px; color: var(--text-muted);
+}
+
+/* Accesos de la barra superior (solo pantallas anchas) */
+.top-main { display: none; }
+.topbar nav a.on, .top-drop-label.on { color: white; border-bottom-color: var(--brass); }
+.top-drop { position: relative; }
+.top-drop-label {
+  color: #b7b4a9; font-size: 14px; cursor: pointer; padding: 4px 0; border-bottom: 2px solid transparent;
+}
+.top-drop:hover .top-drop-label, .top-drop:focus-within .top-drop-label { color: white; border-bottom-color: var(--brass); }
+.top-drop-menu {
+  display: none; position: absolute; top: 100%; right: 0; min-width: 180px; padding: 6px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: 0 12px 28px rgba(0,0,0,0.5); z-index: 60; flex-direction: column;
+}
+.top-drop:hover .top-drop-menu, .top-drop:focus-within .top-drop-menu { display: flex; }
+.top-drop-menu a { padding: 8px 10px; border-bottom: none; border-radius: 6px; color: var(--text); }
+.topbar nav .top-drop-menu a:hover { background: var(--surface-2); color: var(--text); border-bottom: none; }
+
+/* Menu agrupado del panel lateral */
+.side-menu { width: 100%; display: flex; flex-direction: column; gap: 2px; }
+.side-link, .side-menu summary {
+  display: block; padding: 8px 12px; border-radius: 8px; color: #dcd9ce; font-size: 14px;
+  text-decoration: none; cursor: pointer; list-style: none; border-left: 3px solid transparent;
+}
+.side-menu summary::-webkit-details-marker { display: none; }
+.side-menu summary::after { content: "▾"; float: right; color: var(--text-muted); }
+.side-menu details:not([open]) summary::after { content: "▸"; }
+.side-link:hover, .side-menu summary:hover { background: rgba(255,255,255,0.07); color: white; }
+.side-link.sub { padding-left: 26px; font-size: 13.5px; }
+.side-link.active { background: rgba(255,255,255,0.1); color: white; border-left-color: var(--brass); }
+.side-banner { overflow-y: auto; justify-content: flex-start; }
+.side-banner-logo { width: 110px; height: 110px; flex-shrink: 0; }
 
 @media (min-width: 1500px) {
+  .topbar nav.top-links { flex: 1; }
+  .top-links .link-button { margin-left: auto; }
+  .top-links > a { display: none; }
+  .top-main { display: flex; align-items: center; gap: 18px; }
   .side-banner { display: flex; }
   .content { margin-left: 260px; margin-right: 0; width: calc(100% - 260px); max-width: none; }
 }

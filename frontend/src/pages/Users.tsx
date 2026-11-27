@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
-import { permissionLabels, translate } from "../utils/labels";
+import PermissionGroups from "../components/PermissionGroups";
 
 export default function Users() {
   const [users, setUsers] = useState<any[]>([]);
@@ -105,29 +105,21 @@ export default function Users() {
           sumarle, aunque su rol no los incluya. El cambio vale solo para este usuario (la
           próxima vez que inicie sesión). El Administrador siempre tiene todo.
         </p>
-        <table className="data-table">
-          <thead><tr><th></th><th>Permiso</th><th>Estado</th></tr></thead>
-          <tbody>
-            {permissions.map((p) => (
-              <tr key={p.key}>
-                <td>
-                  <input
-                    type="checkbox"
-                    checked={!!p.on}
-                    disabled={editingPermissionsFor.role === "Administrador"}
-                    onChange={() => togglePermission(p.key)}
-                  />
-                </td>
-                <td>{translate(permissionLabels, p.key)}</td>
-                <td>
-                  {p.fromRole && !p.on ? <span className="badge badge-inactive">quitado</span>
-                    : !p.fromRole && p.on ? <span className="badge badge-active">extra</span>
-                    : p.fromRole ? "por rol" : "—"}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <PermissionGroups
+          disabled={editingPermissionsFor.role === "Administrador"}
+          items={permissions.map((p) => ({
+            key: p.key,
+            on: !!p.on,
+            badge:
+              p.fromRole && !p.on ? <span className="badge badge-inactive">quitado</span>
+              : !p.fromRole && p.on ? <span className="badge badge-active">extra</span>
+              : p.fromRole ? <span className="note">por rol</span> : null,
+          }))}
+          onToggle={togglePermission}
+          onToggleMany={(keys, on) =>
+            setPermissions((prev) => prev.map((p) => (keys.includes(p.key) ? { ...p, on } : p)))
+          }
+        />
         <button style={{ marginTop: 16 }} onClick={savePermissions} disabled={permissionsSaving}>
           {permissionsSaving ? "Guardando..." : "Guardar permisos"}
         </button>

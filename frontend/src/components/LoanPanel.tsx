@@ -17,7 +17,9 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
   // Orden recien cargada o abierta a la que se le va a tomar la firma del asociado.
   const [askSign, setAskSign] = useState<any | null>(null);
   const [signing, setSigning] = useState<any | null>(null);
-  const canSign = hasPermission("affiliates.edit");
+  const canSign = hasPermission("orders.sign");
+  const canCreate = hasPermission("orders.create");
+  const canPay = hasPermission("orders.pay");
 
   function loadLoans() {
     api.loansByAffiliate(affiliateId).then(setLoans).catch(() => {});
@@ -101,8 +103,8 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
 
   const isAdmin = localStorage.getItem("role") === "Administrador";
 
-  async function saveSignature(loan: any, image: string, name: string, dni: string) {
-    await api.signLoan(loan.id, image, name, dni);
+  async function saveSignature(loan: any, image: string) {
+    await api.signLoan(loan.id, image);
     setSigning(null);
     setAskSign(null);
     if (selectedLoan && selectedLoan.id === loan.id) setSelectedLoan(await api.getLoan(loan.id));
@@ -127,7 +129,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         <SignaturePad
           title={`Firma del asociado — Orden ${signing.orderNumber || signing.id}`}
           onCancel={() => { setSigning(null); setAskSign(null); }}
-          onConfirm={(img, name, dni) => saveSignature(signing, img, name, dni)}
+          onConfirm={(img) => saveSignature(signing, img)}
         />
       )}
     </>
@@ -154,7 +156,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
         </div>
         {selectedLoan.signatureImage ? (
           <p>
-            Firmada digitalmente por el asociado el {new Date(selectedLoan.signedAt).toLocaleString("es-AR")}{selectedLoan.signatureName ? ` — ${selectedLoan.signatureName}, DNI ${selectedLoan.signatureDni}` : ""}.
+            Firmada digitalmente por el asociado el {new Date(selectedLoan.signedAt).toLocaleString("es-AR")}.
             <br />
             <img src={selectedLoan.signatureImage} alt="Firma del asociado" style={{ maxHeight: 70, border: "1px solid #ccd", background: "#fff", marginTop: 4 }} />
           </p>
@@ -208,7 +210,7 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
                 <td>{i.penalties?.[0] ? `$${i.penalties[0].penaltyAmount} (${i.penalties[0].daysOverdue} días)` : "—"}</td>
                 <td><span className={`badge badge-loan-${i.status}`}>{translate(installmentStatusLabels, i.status)}</span></td>
                 <td>
-                  {i.status !== "paid" && (
+                  {canPay && i.status !== "paid" && (
                     <button className="small-button" onClick={() => handlePay(i.id, i.amount - i.paidAmount)}>
                       Registrar pago
                     </button>
@@ -227,10 +229,10 @@ export default function LoanPanel({ affiliateId }: { affiliateId: number }) {
       {signUi}
       <div className="page-header">
         <h3>Órdenes de compra activas</h3>
-        <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva orden de compra"}</button>
+        {canCreate && <button onClick={() => setShowForm((v) => !v)}>{showForm ? "Cancelar" : "Nueva orden de compra"}</button>}
       </div>
 
-      {showForm && (
+      {canCreate && showForm && (
         <form className="inline-form" onSubmit={handleCreate}>
           <input placeholder="Comercio" value={form.loanType}
             onChange={(e) => setForm({ ...form, loanType: e.target.value })} required />

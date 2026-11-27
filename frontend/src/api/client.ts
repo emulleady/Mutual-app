@@ -75,6 +75,7 @@ export const api = {
   login: (username: string, password: string) =>
     request("/auth/login", { method: "POST", body: JSON.stringify({ username, password }) }),
   dashboard: () => request("/dashboard"),
+  searchIndex: () => request("/affiliates/search-index"),
   searchAffiliates: (q: string) => request(`/affiliates/search?q=${encodeURIComponent(q)}`),
   listAffiliates: (params?: Record<string, string | undefined>) => {
     const qs = new URLSearchParams();
@@ -108,8 +109,8 @@ export const api = {
     request("/loans/payments", { method: "POST", body: JSON.stringify(data) }),
   downloadOrdenCompra: (loanId: number, orderNumber: string) =>
     downloadFile(`/loans/${loanId}/forms/orden-compra`, `orden-compra-${orderNumber}.pdf`),
-  signLoan: (loanId: number, image: string, name: string, dni: string) =>
-    request(`/loans/${loanId}/signature`, { method: "POST", body: JSON.stringify({ image, name, dni }) }),
+  signLoan: (loanId: number, image: string) =>
+    request(`/loans/${loanId}/signature`, { method: "POST", body: JSON.stringify({ image }) }),
   deleteLoan: (loanId: number) => request(`/loans/${loanId}`, { method: "DELETE" }),
   getInterestRates: () => request("/settings/interest-rate"),
   setInterestRate: (data: unknown) =>

@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { hasPermission } from "../utils/permissions";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { api } from "../api/client";
 
 export default function Layout({
@@ -39,16 +39,55 @@ export default function Layout({
   const [orderResults, setOrderResults] = useState<any[]>([]);
   const [searched, setSearched] = useState(false);
 
-  async function handleSearch(e: React.FormEvent) {
+  // Buscador en vivo: el indice de asociados se baja una vez (y se renueva cada 5 minutos)
+  // y se filtra en el navegador a cada letra, igual que el buscador de Empresas: sin
+  // distinguir mayusculas ni tildes, sin comas y con las palabras en cualquier orden.
+  const indexRef = useRef<{ at: number; rows: any[] } | null>(null);
+  const fold = (v: any) => String(v || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  async function loadIndex() {
+    if (indexRef.current && Date.now() - indexRef.current.at < 300000) return indexRef.current.rows;
+    const raw: any[] = await api.searchIndex().catch(() => []);
+    const rows = raw.map((r) => ({
+      ...r,
+      hay: fold([r.affiliateNumber, r.lastName, r.firstName, r.dni, r.cuil, r.phone, r.email, ...(r.dependents || []).flatMap((d: any) => [d.fullName, d.dni])].join(" ")),
+    }));
+    indexRef.current = { at: Date.now(), rows };
+    return rows;
+  }
+
+  useEffect(() => {
+    const text = query.trim();
+    if (!text) {
+      setResults([]);
+      setOrderResults([]);
+      setSearched(false);
+      return;
+    }
+    let cancelled = false;
+    const terms = fold(text.replace(/[,;]/g, " ")).split(/\s+/).filter(Boolean);
+    (async () => {
+      const rows = await loadIndex();
+      if (cancelled) return;
+      setResults(rows.filter((r) => terms.every((t) => r.hay.includes(t))).slice(0, 20));
+      setSearched(true);
+    })();
+    const timer = setTimeout(async () => {
+      if (!hasPermission("orders.view") || text.length < 2) {
+        setOrderResults([]);
+        return;
+      }
+      const orders = await api.searchLoans(text).catch(() => []);
+      if (!cancelled) setOrderResults(orders);
+    }, 250);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [query]);
+
+  function handleSearch(e: React.FormEvent) {
     e.preventDefault();
-    if (!query.trim()) return;
-    const [found, orders] = await Promise.all([
-      api.searchAffiliates(query).catch(() => []),
-      (hasPermission("orders.view") ? api.searchLoans(query) : Promise.resolve([])).catch(() => []),
-    ]);
-    setResults(found);
-    setOrderResults(orders);
-    setSearched(true);
   }
 
   function closeSearch() {
@@ -81,10 +120,30 @@ export default function Layout({
     </>
   );
 
+  const isActive = (to: string) => (to === "/" ? location.pathname === "/" : location.pathname.startsWith(to));
+  type MenuLink = { to: string; label: string };
+  const tesoreria: MenuLink[] = [
+    ...(canFinance ? [{ to: "/caja", label: "Caja" }, { to: "/cobranzas", label: "Cobranzas" }] : []),
+  ];
+  const administracion: MenuLink[] = [
+    ...(canSettings ? [{ to: "/configuracion", label: "Configuración" }] : []),
+    ...(canUsers ? [{ to: "/usuarios", label: "Usuarios" }, { to: "/roles", label: "Roles" }] : []),
+    ...(canAudit ? [{ to: "/auditoria", label: "Auditoría" }] : []),
+  ];
+  // Menu del panel lateral: accesos directos y grupos (Tesoreria, Administracion).
+  const menu: ({ to: string; label: string } | { group: string; items: MenuLink[] })[] = [
+    ...(isAdmin ? [{ to: "/", label: "Resumen" }] : []),
+    ...(canCompanies ? [{ to: "/empresas", label: "Empresas" }] : []),
+    ...(canPharmacy ? [{ to: "/farmacia", label: "Farmacia" }] : []),
+    ...(canInventory ? [{ to: "/inventario", label: "Inventario" }] : []),
+    ...(!pharmacyOnly ? [{ to: "/deporte", label: "Deporte" }] : []),
+    ...(tesoreria.length ? [{ group: "Tesorería", items: tesoreria }] : []),
+  ];
+
   return (
     <div className="app-shell">
       <header className="topbar">
-        <Link to={pharmacyOnly ? "/farmacia" : "/"} className="brand">
+        <Link to={pharmacyOnly ? "/farmacia" : isAdmin ? "/" : "/afiliados"} className="brand">
           <img src="/logo.png" alt="Mutual Petrolero Privado" className="brand-logo" />
           <span>Mutual Petrolero Privado</span>
         </Link>
@@ -126,8 +185,24 @@ export default function Layout({
           )}
         </div>
         )}
-        <nav>
-          {!pharmacyOnly && <Link to="/">Resumen</Link>}
+        <nav className="top-links">
+          {/* Pantallas anchas: Asociados, Órdenes y Administración quedan arriba; el resto en el panel lateral. */}
+          <div className="top-main">
+            {!pharmacyOnly && <Link to="/afiliados" className={isActive("/afiliados") ? "on" : ""}>Asociados</Link>}
+            {canOrders && <Link to="/ordenes" className={isActive("/ordenes") ? "on" : ""}>Órdenes de compra</Link>}
+            {canAgreements && <Link to="/convenios" className={isActive("/convenios") ? "on" : ""}>Convenios</Link>}
+            {administracion.length > 0 && (
+              <div className="top-drop" tabIndex={0}>
+                <span className={administracion.some((it) => isActive(it.to)) ? "top-drop-label on" : "top-drop-label"}>Administración ▾</span>
+                <div className="top-drop-menu">
+                  {administracion.map((it) => (
+                    <Link key={it.to} to={it.to}>{it.label}</Link>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+          {isAdmin && <Link to="/">Resumen</Link>}
           {!pharmacyOnly && <Link to="/afiliados">Asociados</Link>}
           {canPharmacy && <Link to="/farmacia">Farmacia</Link>}
           {canOrders && <Link to="/ordenes">Órdenes</Link>}
@@ -137,6 +212,7 @@ export default function Layout({
           {canCompanies && <Link to="/empresas">Empresas</Link>}
           {canAudit && <Link to="/auditoria">Auditoría</Link>}
           {canAgreements && <Link to="/convenios">Convenios</Link>}
+          {!pharmacyOnly && <Link to="/deporte">Deporte</Link>}
           {canInventory && <Link to="/inventario">Inventario</Link>}
           {canFinance && <Link to="/cobranzas">Cobranzas</Link>}
           {canFinance && <Link to="/caja">Caja</Link>}
@@ -165,23 +241,27 @@ export default function Layout({
         <img src="/logo.png" alt="Mutual Petrolero Privado" className="side-banner-logo" />
         <div className="side-banner-info">
           <p className="side-banner-title">Mutual Petrolero Privado</p>
-          <p>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M12 2C8.1 2 5 5.1 5 9c0 5.2 7 13 7 13s7-7.8 7-13c0-3.9-3.1-7-7-7zm0 9.5A2.5 2.5 0 1 1 12 6.5a2.5 2.5 0 0 1 0 5z"/></svg>
-            {" "}Ameghino 867, Río Grande, Tierra del Fuego
-          </p>
-          <p>
-            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor"><path d="M6.6 10.8c1.4 2.7 3.6 4.9 6.3 6.3l2.1-2.1c.3-.3.7-.4 1-.2 1.1.4 2.3.6 3.6.6.6 0 1 .4 1 1V20c0 .6-.4 1-1 1C10.6 21 3 13.4 3 4c0-.6.4-1 1-1h3.5c.6 0 1 .4 1 1 0 1.2.2 2.5.6 3.6.1.4 0 .8-.3 1.1l-2.2 2.1z"/></svg>
-            {" "}2964 42-2060
-          </p>
         </div>
 
-        {isAdmin && (
-          <div className="side-banner-shortcuts">
-            <p className="side-banner-title">Accesos directos</p>
-            <Link to="/auditoria?usuario=Mmansilla">Movimientos de Mmansilla</Link>
-            <Link to="/auditoria?usuario=Rrodriguez">Movimientos de Rrodriguez</Link>
-          </div>
-        )}
+        <nav className="side-menu" aria-label="Menú principal">
+          {menu.map((entry, i) =>
+            "to" in entry ? (
+              <Link key={i} to={entry.to} className={isActive(entry.to) ? "side-link active" : "side-link"}>{entry.label}</Link>
+            ) : (
+              <details key={i} open={entry.items.some((it) => isActive(it.to)) || undefined}>
+                <summary>{entry.group}</summary>
+                {entry.items.map((it) => (
+                  <Link key={it.to} to={it.to} className={isActive(it.to) ? "side-link sub active" : "side-link sub"}>{it.label}</Link>
+                ))}
+              </details>
+            )
+          )}
+        </nav>
+
+        <div className="side-banner-contact">
+          <span>Ameghino 867, Río Grande, Tierra del Fuego</span>
+          <span>Tel. 2964 42-2060</span>
+        </div>
       </aside>
 
       <main className="content">

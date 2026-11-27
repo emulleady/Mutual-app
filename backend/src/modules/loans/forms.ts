@@ -80,9 +80,8 @@ function fmtDni(dni: string | null | undefined): string {
   return digits.replace(/\B(?=(\d{3})+(?!\d))/g, ".");
 }
 
-// Genera la Orden de Compra en PDF: dos cupones en la misma hoja (uno para
-// la Mutual, otro más completo para el Comercio/Socio, con las cláusulas
-// de reconocimiento de deuda), tal cual el formulario en papel.
+// Genera la Orden de Compra en PDF: un único cupón completo (con las cláusulas
+// de reconocimiento de deuda). Si se firmó en pantalla, la firma sale impresa.
 export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any, sealer?: { name: string; role: string } | null) {
   res.setHeader("Content-Type", "application/pdf");
   res.setHeader(
@@ -108,130 +107,42 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
     ? socioTypeRaw
     : `SOCIO ${socioTypeRaw}`;
 
-  // ---------- Cupón 1: para la Mutual (compacto) ----------
+  // ---------- Orden única (la copia queda con el asociado / se firma en pantalla) ----------
+  const signed = !!(loan.signatureImage && /^data:image\/png;base64,/.test(loan.signatureImage));
   drawLetterhead(doc);
 
-  doc
-    .fontSize(14)
-    .font("Helvetica-Bold")
-    .text("ORDEN DE COMPRA", 35, 112, { width: 525, align: "center", underline: true });
-  doc
-    .fontSize(11)
-    .text("AUTORIZACIÓN DE DESCUENTO DE HABERES", 35, 132, { width: 525, align: "center" });
+  let y = 118;
+  doc.fontSize(16).font("Helvetica-Bold").text("ORDEN DE COMPRA", 35, y, { width: 525, align: "center" });
+  y += 24;
+  doc.fontSize(13).text("AUTORIZACIÓN DE DESCUENTO DE HABERES", 35, y, { width: 525, align: "center", underline: true });
+  y += 36;
 
-  let y = 162;
-  fieldLine(doc, "Fecha:", fmtDate(loan.grantedAt), 35, y, 45, 200);
-  fieldLine(doc, "Lugar:", "Río Grande, Tierra del Fuego", 235, y, 42, 200);
-  doc.fontSize(9.5).font("Helvetica-Bold").text(`N° ${orderNumber}`, 480, y);
-  y += 26;
+  const ROW = 30; // más aire entre filas
+  fieldLine(doc, "Fecha:", fmtDate(loan.grantedAt), 35, y, 45, 175);
+  fieldLine(doc, "Lugar:", "Río Grande, Tierra del Fuego", 220, y, 42, 205);
+  doc.fontSize(10).font("Helvetica-Bold").text(`N° ${orderNumber}`, 435, y, { width: 125, align: "right", lineBreak: false });
+  y += ROW + 6;
 
-  doc.moveTo(35, y).lineTo(560, y).strokeColor("#333333").lineWidth(1).stroke();
-  y += 12;
-
-  doc.fontSize(10).font("Helvetica-Bold").text(`DATOS ${socioLabel}`, 35, y, { underline: true });
-  y += 18;
-
-  fieldLine(doc, "Apellido y Nombre:", fullNameNormal, 35, y, 110, 335);
-  fieldLine(doc, "Firma:", "", 385, y, 40, 175);
-  y += 22;
-
-  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 35, y, 60, 165);
-  fieldLine(doc, "Asociado/a N.º:", asociadoNumero, 205, y, 78, 175);
-  fieldLine(doc, "Comercio:", loan.loanType || "", 390, y, 62, 170);
-  y += 22;
-
-  fieldLine(doc, "Importe Total de Compra: $", loan.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 35, y, 150, 255);
-  y += 22;
-
-  fieldLine(
-    doc,
-    "Cuota/s:",
-    `${loan.installmentsCount} (${numberToWords(loan.installmentsCount)})`,
-    35,
-    y,
-    50,
-    255
-  );
-  fieldLine(
-    doc,
-    "Monto Cuotas: $",
-    loan.installmentValue.toLocaleString("es-AR", { minimumFractionDigits: 2 }),
-    310,
-    y,
-    90,
-    250
-  );
-  y += 16;
-
-  doc.fontSize(9).font("Helvetica-Bold").text("MUTUAL", 500, y, { width: 60, align: "right" });
-  y += 20;
-
-  // ---------- Línea de corte ----------
-  doc
-    .moveTo(35, y)
-    .lineTo(560, y)
-    .dash(4, { space: 3 })
-    .strokeColor("#888888")
-    .lineWidth(1)
-    .stroke()
-    .undash();
-  y += 16;
-
-  // ---------- Cupón 2: para el Comercio / Socio (completo) ----------
-  const topOfCoupon2 = y;
-  drawLetterhead(doc, topOfCoupon2);
-
-  y = topOfCoupon2 + 84;
-  doc
-    .fontSize(15)
-    .font("Helvetica-Bold")
-    .text("ORDEN DE COMPRA", 35, y, { width: 525, align: "center" });
-  y += 20;
-  doc
-    .fontSize(13)
-    .text("AUTORIZACIÓN DE DESCUENTO DE HABERES", 35, y, { width: 525, align: "center", underline: true });
-  y += 20;
-
-  fieldLine(doc, "Fecha:", fmtDate(loan.grantedAt), 35, y, 45, 350);
-  doc.fontSize(9.5).font("Helvetica-Bold").text(`N° ${orderNumber}`, 480, y);
-  y += 18;
-
-  doc.fontSize(10).font("Helvetica-Bold").text(`DATOS ${socioLabel}:`, 35, y, { underline: true });
-  y += 14;
+  doc.fontSize(10.5).font("Helvetica-Bold").text(`DATOS ${socioLabel}:`, 35, y, { underline: true });
+  y += ROW - 6;
 
   fieldLine(doc, "Apellido y Nombre:", fullNameNormal, 35, y, 105, 300);
-  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 350, y, 55, 175);
-  y += 16;
+  fieldLine(doc, "Empresa:", affiliate.company?.name || "", 350, y, 55, 210);
+  y += ROW;
 
   fieldLine(doc, "Asociado/a N.º:", asociadoNumero, 35, y, 90, 260);
-  fieldLine(doc, "Comercio:", loan.loanType || "", 310, y, 58, 215);
-  y += 16;
+  fieldLine(doc, "Comercio:", loan.loanType || "", 310, y, 58, 250);
+  y += ROW;
 
-  fieldLine(doc, "Importe Total Compra Pesos: $", loan.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 35, y, 175, 260);
-  y += 16;
+  fieldLine(doc, "Importe Total Compra Pesos: $", loan.amount.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 35, y, 175, 300);
+  y += ROW;
 
-  fieldLine(
-    doc,
-    "Cuota/s:",
-    `${loan.installmentsCount} (${numberToWords(loan.installmentsCount)})`,
-    35,
-    y,
-    50,
-    220
-  );
-  fieldLine(
-    doc,
-    "Monto Cuotas: $",
-    loan.installmentValue.toLocaleString("es-AR", { minimumFractionDigits: 2 }),
-    270,
-    y,
-    88,
-    250
-  );
-  y += 18;
+  fieldLine(doc, "Cuota/s:", `${loan.installmentsCount} (${numberToWords(loan.installmentsCount)})`, 35, y, 50, 255);
+  fieldLine(doc, "Monto Cuotas: $", loan.installmentValue.toLocaleString("es-AR", { minimumFractionDigits: 2 }), 310, y, 88, 250);
+  y += ROW + 4;
 
   doc
-    .fontSize(8)
+    .fontSize(9)
     .font("Helvetica")
     .text(
       "Por la presente y de conformidad con los art. 146 de la ley 20.744 y TO DN 0390/76 otorgo mi expreso " +
@@ -244,9 +155,9 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
         "de la empresa pudiera adeudar por cualquier causa y/o créditos que me fueran otorgados.",
       35,
       y,
-      { width: 525, align: "justify", lineGap: 0 }
+      { width: 525, align: "justify", lineGap: 1.5 }
     );
-  y = doc.y + 6;
+  y = doc.y + 12;
 
   const domicilioCompleto = [
     affiliate.address,
@@ -266,15 +177,14 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
       "Tribunales Ordinarios del Distrito Judicial Norte de la Provincia de Tierra del Fuego A. e I.A.S.",
     35,
     y,
-    { width: 525, align: "justify", lineGap: 0 }
+    { width: 525, align: "justify", lineGap: 1.5 }
   );
-  y = doc.y + 8;
+  y = doc.y + 16;
 
   const lastInstallment = (loan.installments || [])[loan.installments?.length - 1];
   fieldLine(doc, "Vencimiento:", lastInstallment ? fmtDate(lastInstallment.dueDate) : "", 35, y, 65, 260);
-  // Se deja más espacio en blanco antes de las líneas de firma (2cm ≈ 57pt)
-  // para que se pueda firmar con más comodidad y prolijidad.
-  y += 26 + 57;
+  // Espacio generoso para firmar (a mano o con la firma digital).
+  y += ROW + 84;
 
   // Sello de la Mutual: nombre de quien hizo la orden y, debajo, su cargo.
   if (sealer && sealer.name) {
@@ -290,38 +200,37 @@ export function generateOrdenCompraPdf(res: Response, loan: any, affiliate: any,
     doc.fillColor("#000000");
   }
 
-  // Firma digital del asociado (tomada en pantalla), sobre la linea de "Firma Asociado/a".
-  if (loan.signatureImage && /^data:image\/png;base64,/.test(loan.signatureImage)) {
+  // Firma digital del asociado (tomada en pantalla), sobre la línea de "Firma Asociado/a".
+  if (signed) {
     try {
       const img = Buffer.from(loan.signatureImage.split(",")[1], "base64");
-      doc.image(img, 180, y - 52, { fit: [120, 48], align: "center", valign: "bottom" });
+      doc.image(img, 195, y - 76, { fit: [220, 76], align: "center", valign: "bottom" });
     } catch {
-      /* si la imagen no se puede leer, la orden sale con la linea para firmar a mano */
+      /* si la imagen no se puede leer, la orden sale con la línea para firmar a mano */
     }
   }
 
-  // Aclaracion y DNI escritos por el asociado al firmar en pantalla.
-  if (loan.signatureName || loan.signatureDni) {
-    doc.save().fillColor("#000000").font("Helvetica").fontSize(9);
-    if (loan.signatureName) doc.text(String(loan.signatureName), 320, y - 13, { width: 105, align: "center", lineBreak: false, ellipsis: true });
-    if (loan.signatureDni) doc.text(String(loan.signatureDni), 430, y - 13, { width: 100, align: "center", lineBreak: false, ellipsis: true });
-    doc.restore();
-  }
-
-  fieldLine(doc, "", "", 35, y, 0, 130);
-  fieldLine(doc, "", "", 175, y, 0, 130);
-  fieldLine(doc, "", "", 320, y, 0, 100);
-  fieldLine(doc, "", "", 430, y, 0, 100);
-  y += 12;
-
+  // Firmada en pantalla: solo firma Mutual y firma del asociado.
+  // En papel se mantienen además Aclaración y D.N.I. para completar a mano.
+  fieldLine(doc, "", "", 35, y, 0, 150);
   doc.fontSize(8).font("Helvetica-Bold");
-  doc.text("Aclaración y Firma Mutual", 35, y, { width: 130, align: "center" });
-  doc.text("Firma Asociado/a", 175, y, { width: 130, align: "center" });
-  doc.text("Aclaración", 320, y, { width: 100, align: "center" });
-  doc.text("D.N.I.", 430, y, { width: 100, align: "center" });
-  y += 18;
-
-  doc.fontSize(9).font("Helvetica-Bold").text("COMERCIO", 500, y, { width: 60, align: "right" });
+  if (signed) {
+    fieldLine(doc, "", "", 205, y, 0, 200);
+    y += 12;
+    doc.fontSize(8).font("Helvetica-Bold");
+    doc.text("Aclaración y Firma Mutual", 35, y, { width: 150, align: "center" });
+    doc.text("Firma Asociado/a", 205, y, { width: 200, align: "center" });
+  } else {
+    fieldLine(doc, "", "", 205, y, 0, 130);
+    fieldLine(doc, "", "", 350, y, 0, 100);
+    fieldLine(doc, "", "", 460, y, 0, 100);
+    y += 12;
+    doc.fontSize(8).font("Helvetica-Bold");
+    doc.text("Aclaración y Firma Mutual", 35, y, { width: 150, align: "center" });
+    doc.text("Firma Asociado/a", 205, y, { width: 130, align: "center" });
+    doc.text("Aclaración", 350, y, { width: 100, align: "center" });
+    doc.text("D.N.I.", 460, y, { width: 100, align: "center" });
+  }
 
   doc.end();
 }

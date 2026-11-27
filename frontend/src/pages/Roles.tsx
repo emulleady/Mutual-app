@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../api/client";
 import { permissionLabels, translate } from "../utils/labels";
+import PermissionGroups from "../components/PermissionGroups";
 
 type RoleForm = { id: number | null; name: string; description: string; permissionKeys: string[] };
 
@@ -112,22 +113,22 @@ export default function Roles() {
           />
 
           <h3 style={{ marginTop: 20 }}>Permisos</h3>
-          <table className="data-table">
-            <tbody>
-              {allKeys.map((key) => (
-                <tr key={key}>
-                  <td style={{ width: 40 }}>
-                    <input
-                      type="checkbox"
-                      checked={form.permissionKeys.includes(key)}
-                      onChange={() => toggleKey(key)}
-                    />
-                  </td>
-                  <td>{translate(permissionLabels, key)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <PermissionGroups
+            items={allKeys.map((k: string) => ({ key: k, on: form.permissionKeys.includes(k) }))}
+            onToggle={toggleKey}
+            onToggleMany={(keys, on) =>
+              setForm((f) =>
+                f
+                  ? {
+                      ...f,
+                      permissionKeys: on
+                        ? Array.from(new Set([...f.permissionKeys, ...keys]))
+                        : f.permissionKeys.filter((k: string) => !keys.includes(k)),
+                    }
+                  : f
+              )
+            }
+          />
 
           {error && <div className="error-box" style={{ marginTop: 12 }}>{error}</div>}
           <button type="submit" style={{ marginTop: 16 }} disabled={saving}>

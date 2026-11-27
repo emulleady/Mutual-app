@@ -53,6 +53,9 @@ const affiliateSchema = z.object({
   membershipDate: z.string().datetime().optional().nullable(),
 });
 
+// Minusculas y sin tildes, para comparar textos.
+const foldText = (v: string) => v.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
 // Palabras de una busqueda: las comas y puntos y comas cuentan como espacios, asi
 // "Romero, Hector", "Romero Hector" y "hector romero" encuentran a la misma persona.
 const searchWords = (text: string) => text.replace(/[,;]/g, " ").split(/\s+/).filter(Boolean);
@@ -69,29 +72,50 @@ router.get("/reports/medife-alta", requirePermission("affiliates.view"), async (
 
 // Buscador global: por DNI, numero de afiliado, nombre, apellido,
 // telefono o email (punto 12 del brief).
+// Indice liviano para el buscador de la barra superior: el navegador lo baja una vez
+// y filtra mientras se escribe (sin pedir al servidor en cada letra).
+router.get("/search-index", async (_req, res) => {
+  const rows = await prisma.affiliate.findMany({
+    select: {
+      id: true, affiliateNumber: true, firstName: true, lastName: true, dni: true, cuil: true, phone: true, email: true, status: true,
+      dependents: { select: { fullName: true, dni: true } },
+    },
+    orderBy: { lastName: "asc" },
+  });
+  res.json(rows);
+});
+
 router.get("/search", async (req, res) => {
   const q = (req.query.q as string) || "";
-  if (q.trim().length === 0) {
+  const terms = foldText(q.replace(/[,;]/g, " ")).split(/\s+/).filter(Boolean);
+  if (terms.length === 0) {
     return res.json([]);
   }
 
-  const results = await prisma.affiliate.findMany({
-    where: {
-      AND: searchWords(q).map((w) => ({
-        OR: [
-          { dni: { contains: w } },
-          { affiliateNumber: { contains: w } },
-          { firstName: { contains: w, mode: "insensitive" as const } },
-          { lastName: { contains: w, mode: "insensitive" as const } },
-          { phone: { contains: w } },
-          { email: { contains: w, mode: "insensitive" as const } },
-        ],
-      })),
+  // Mismo metodo que el buscador de Empresas: sin importar mayusculas ni tildes,
+  // sin comas y con las palabras en cualquier orden (cada una puede estar en
+  // cualquier dato de la persona o de sus familiares).
+  const light = await prisma.affiliate.findMany({
+    select: {
+      id: true, affiliateNumber: true, firstName: true, lastName: true, dni: true, cuil: true, phone: true, email: true,
+      dependents: { select: { fullName: true, dni: true } },
     },
-    take: 20,
     orderBy: { lastName: "asc" },
   });
 
+  const ids = light
+    .filter((a) => {
+      const hay = foldText(
+        [a.affiliateNumber, a.lastName, a.firstName, a.dni, a.cuil, a.phone, a.email, ...a.dependents.flatMap((d) => [d.fullName, d.dni])]
+          .filter(Boolean)
+          .join(" ")
+      );
+      return terms.every((t) => hay.includes(t));
+    })
+    .slice(0, 20)
+    .map((a) => a.id);
+
+  const results = await prisma.affiliate.findMany({ where: { id: { in: ids } }, orderBy: { lastName: "asc" } });
   res.json(results);
 });
 

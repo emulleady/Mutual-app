@@ -15,6 +15,7 @@ import Collections from "./pages/Collections";
 import Cash from "./pages/Cash";
 import Roles from "./pages/Roles";
 import Pharmacy from "./pages/Pharmacy";
+import Sports from "./pages/Sports";
 import Layout from "./components/Layout";
 import { canView } from "./utils/permissions";
 
@@ -92,8 +93,9 @@ export default function App() {
       </Routes>
       ) : (
       <Routes>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={isAdmin ? <Dashboard /> : <Navigate to="/afiliados" replace />} />
         {canPharmacy && <Route path="/farmacia" element={<Pharmacy />} />}
+        <Route path="/deporte" element={<Sports />} />
         <Route path="/afiliados" element={<AffiliatesList />} />
         <Route path="/afiliados/:id" element={<AffiliateProfile />} />
         {canOrders && <Route path="/ordenes" element={<Orders />} />}
